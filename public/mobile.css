@@ -1,0 +1,158 @@
+@media (max-width:760px){
+  html,body{width:100%;min-height:100%;overflow-x:hidden}
+
+  /* When a conversation is open, use the entire phone viewport like a native chat app. */
+  .shell:has(#chat:not([hidden])){
+    display:block;
+    width:100%;
+    height:100dvh;
+    min-height:100dvh;
+    overflow:hidden;
+    background:#f3f6f5;
+  }
+  .shell:has(#chat:not([hidden])) aside{display:none}
+  .shell:has(#chat:not([hidden])) main{
+    width:100%;
+    height:100dvh;
+    min-height:0;
+    padding:0;
+    display:block;
+    overflow:hidden;
+  }
+
+  #chat{
+    width:100%;
+    max-width:none;
+    height:100dvh;
+    min-height:0;
+    margin:0;
+    padding:0;
+    background:#f3f6f5;
+    overflow:hidden;
+  }
+
+  #chat header{
+    flex:0 0 auto;
+    min-height:64px;
+    padding:max(10px,env(safe-area-inset-top)) 10px 9px;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:8px;
+    background:#fff;
+    border-bottom:1px solid #dce5de;
+    box-shadow:0 1px 8px #173e2e0c;
+    z-index:3;
+  }
+  #chat header>div:first-child{min-width:0}
+  #chat header .eyebrow{display:none}
+  #chat h2{
+    margin:0;
+    font-size:19px;
+    line-height:1.2;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  #chat header .actions{
+    display:flex;
+    flex-wrap:nowrap;
+    align-items:center;
+    gap:3px;
+  }
+  #chat header .actions button{
+    min-height:38px;
+    padding:8px 9px;
+    border-radius:9px;
+    font-size:12px;
+    white-space:nowrap;
+  }
+  #chat #leave{padding-left:7px;padding-right:7px}
+
+  .member-bar{
+    flex:0 0 auto;
+    min-height:34px;
+    padding:7px 11px;
+    display:block;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    background:#f8faf9;
+    font-size:12px;
+  }
+  .member-bar .ai-label{display:none}
+
+  .call-banner,.active-call{
+    flex:0 0 auto;
+    margin:8px 8px 0;
+    padding:10px 12px;
+    gap:10px;
+    border-radius:11px;
+  }
+
+  #messages{
+    flex:1 1 auto;
+    min-height:0;
+    width:100%;
+    padding:12px 9px 10px;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+  }
+  .message{max-width:88%;margin-bottom:12px}
+  .message .meta{gap:7px;margin-bottom:4px;font-size:12px}
+  .meta time{font-size:10px}
+  .delete-message{font-size:10px}
+  .bubble{padding:9px 11px;line-height:1.45;border-radius:3px 12px 12px 12px;font-size:14px}
+  .own .bubble{border-radius:12px 3px 12px 12px}
+  .empty{padding:45px 18px}
+  .empty strong{font-size:20px}
+
+  #typing,#thinking{
+    flex:0 0 auto;
+    padding:4px 12px;
+    font-size:12px;
+    background:#f3f6f5;
+  }
+
+  #message-form{
+    flex:0 0 auto;
+    width:100%;
+    margin:0;
+    padding:7px 8px calc(7px + env(safe-area-inset-bottom));
+    border:0;
+    border-top:1px solid #d6e0db;
+    border-radius:0;
+    background:#fff;
+    box-shadow:0 -2px 12px #173e2e0b;
+  }
+  #message-form textarea{
+    min-height:42px;
+    max-height:112px;
+    padding:9px 10px;
+    border:1px solid #d8e2dd;
+    border-radius:12px;
+    background:#f8faf9;
+    font-size:16px;
+    line-height:1.35;
+  }
+  .composer-footer{margin-top:5px;gap:5px}
+  .composer-footer #mention{padding:8px 9px;font-size:12px}
+  .composer-footer #send{padding:9px 13px;font-size:13px}
+  .chat-note{display:none}
+
+  #notice{
+    width:calc(100% - 20px);
+    max-width:none;
+    bottom:calc(76px + env(safe-area-inset-bottom));
+    padding:11px 13px;
+    font-size:13px;
+  }
+}
+
+@media (max-width:390px){
+  #chat header .actions{gap:2px}
+  #chat header .actions button{padding:7px 7px;font-size:11px}
+  #chat h2{font-size:17px}
+  .message{max-width:92%}
+}
