@@ -11,7 +11,7 @@ async function connect(port){const s=client('http://localhost:'+port,{transports
 
 test('real-time delivery, DM isolation, ownership, deduplication, AI routing and persistence',async()=>{
   const folder=mkdtempSync(join(tmpdir(),'live-rooms-'));const dbPath=join(folder,'test.db');let aiCalls=0;const pushes=[];
-  let chat=createChat({dbPath,pushNotification:async(subscription,payload)=>{pushes.push({subscription,payload});},generate:async history=>{aiCalls++;assert.match(history.at(-1).text,/@gemini/);return 'Mocked AI answer';}});
+  let chat=createChat({dbPath,callAlertInterval:10,callAlertAttempts:3,pushNotification:async(subscription,payload)=>{pushes.push({subscription,payload});},generate:async history=>{aiCalls++;assert.match(history.at(-1).text,/@gemini/);return 'Mocked AI answer';}});
   await new Promise(r=>chat.server.listen(0,r));const port=chat.server.address().port;
   const sockets=[];
   try{
@@ -23,8 +23,8 @@ test('real-time delivery, DM isolation, ownership, deduplication, AI routing and
     const keyResponse=await fetch('http://localhost:'+port+'/api/push/public-key');assert.equal(keyResponse.status,200);assert.ok((await keyResponse.json()).publicKey);
     const subscribed=await fetch('http://localhost:'+port+'/api/push/subscribe',{method:'POST',headers:{Authorization:'Bearer '+b.token,'Content-Type':'application/json'},body:JSON.stringify({endpoint:'https://push.example/bob',keys:{p256dh:'test-key',auth:'test-auth'}})});assert.equal(subscribed.status,200);
     const ringing=once(bob,'call:ring');const aliceCall=await rpc(alice,'call:join',{roomId:room.id});assert.equal((await ringing)[0].callId,aliceCall.callId);
-    await new Promise(resolve=>setImmediate(resolve));assert.ok(pushes.some(item=>item.payload.type==='call'&&item.payload.callId===aliceCall.callId));
-    const bobCall=await rpc(bob,'call:join',{roomId:room.id});assert.equal(bobCall.participants[0].username,'alice');
+    await new Promise(resolve=>setTimeout(resolve,25));const ringingPushes=pushes.filter(item=>item.payload.type==='call'&&item.payload.callId===aliceCall.callId);assert.ok(ringingPushes.length>=2);assert.equal(ringingPushes[0].payload.by,'alice');
+    const bobCall=await rpc(bob,'call:join',{roomId:room.id});assert.equal(bobCall.participants[0].username,'alice');const pushesAfterAnswer=pushes.length;await new Promise(resolve=>setTimeout(resolve,25));assert.equal(pushes.length,pushesAfterAnswer);
     const relayed=once(alice,'call:signal');await rpc(bob,'call:signal',{roomId:room.id,callId:bobCall.callId,target:bobCall.participants[0].socketId,signal:{description:{type:'offer',sdp:'test'}}});assert.equal((await relayed)[0].user,'bob');
     assert.match((await rpc(eve,'call:join',{roomId:room.id})).error,/Join/);await rpc(alice,'call:leave',{roomId:room.id});const callEnded=once(alice,'call:ended');await rpc(bob,'call:leave',{roomId:room.id});assert.equal((await callEnded)[0].callId,aliceCall.callId);
     const arrival=once(bob,'message');const sent=await rpc(alice,'send',{roomId:room.id,text:'hello',clientId:'hello-1'});assert.equal((await arrival)[0].text,'hello');
@@ -51,6 +51,7 @@ test('real-time delivery, DM isolation, ownership, deduplication, AI routing and
     assert.equal((await rpc(restored,'enter',{roomId:dm.id})).room.messages[0].text,'private hello');
     const health=await fetch('http://localhost:'+chat.server.address().port+'/api/health');assert.equal(health.status,200);
     const page=await fetch('http://localhost:'+chat.server.address().port);assert.match(await page.text(),/Your people/);
+    const manifest=await fetch('http://localhost:'+chat.server.address().port+'/manifest.webmanifest').then(response=>response.json());assert.equal(manifest.id,'/');assert.equal(manifest.start_url,'/?source=pwa');
   }finally{for(const s of sockets)s.disconnect();await new Promise(r=>chat.io.close(r));rmSync(folder,{recursive:true,force:true});}
 });
 test('missing Gemini key is a clear error',async()=>{const key=process.env.GEMINI_API_KEY;delete process.env.GEMINI_API_KEY;try{await assert.rejects(askGemini([]),/not configured/);}finally{if(key)process.env.GEMINI_API_KEY=key;}});
