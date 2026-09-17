@@ -7,4 +7,5 @@ COPY server.js ./
 COPY public ./public
 RUN mkdir -p data
 EXPOSE 3000
+# validated release trigger: app commit 2391d036
 CMD ["sh", "-c", "chown node:node /app/data && exec su-exec node node server.js"]
