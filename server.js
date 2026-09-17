@@ -25,7 +25,7 @@ export async function askGemini(history) {
   return text.slice(0,16000);
 }
 
-export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotification}={}) {
+export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotification,callAlertInterval=6000,callAlertAttempts=5}={}) {
   if(dbPath!==':memory:')mkdirSync(dirname(dbPath),{recursive:true});
   const db=new DatabaseSync(dbPath);
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
@@ -115,14 +115,25 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
   function append(id,message){const m={id:randomUUID(),roomId:id,at:Date.now(),...message};run('INSERT INTO messages VALUES (?,?,?,?)',m.id,id,JSON.stringify(m),m.at);run('DELETE FROM messages WHERE room_id=? AND id NOT IN (SELECT id FROM messages WHERE room_id=? ORDER BY at DESC,rowid DESC LIMIT 100)',id,id);io.to(id).emit('message',m);return m;}
   async function notifyRoom(roomId,excludeUser,payload){
     const subscriptions=sql('SELECT p.endpoint,p.subscription FROM push_subscriptions p JOIN memberships m ON m.username=p.username WHERE m.room_id=? AND p.username<>?',roomId,excludeUser||'');
-    await Promise.allSettled(subscriptions.map(async row=>{try{await deliverPush(JSON.parse(row.subscription),payload,{TTL:payload.type==='call'?60:86400,urgency:payload.type==='call'?'high':'normal',topic:String(payload.tag||'live-rooms').slice(0,32)});}catch(error){if(error?.statusCode===404||error?.statusCode===410)run('DELETE FROM push_subscriptions WHERE endpoint=?',row.endpoint);}}));
+    await Promise.allSettled(subscriptions.map(async row=>{try{await deliverPush(JSON.parse(row.subscription),payload,{TTL:payload.type==='call'?45:86400,urgency:payload.type==='call'?'high':'normal',topic:String(payload.tag||'live-rooms').slice(0,32)});}catch(error){
+      if([401,403,404,410].includes(error?.statusCode))run('DELETE FROM push_subscriptions WHERE endpoint=?',row.endpoint);
+      console.warn('push delivery failed',error?.statusCode||error?.code||error?.name);
+    }}));
+  }
+  function stopCallAlerts(call){if(call?.alertTimer){clearInterval(call.alertTimer);call.alertTimer=null;}}
+  function startCallAlerts(call,caller){
+    const alert=()=>{
+      if(calls.get(call.roomId)!==call||call.participants.size>1||call.alertCount>=callAlertAttempts)return stopCallAlerts(call);
+      call.alertCount++;void notifyRoom(call.roomId,caller,{type:'call',title:'Incoming call from @'+caller,body:'Tap to answer in Live Rooms',url:'/?room='+call.roomId+'&call='+encodeURIComponent(call.id),roomId:call.roomId,callId:call.id,by:caller,tag:'call-'+call.id,attempt:call.alertCount,at:Date.now()});
+    };
+    alert();if(call.alertCount<callAlertAttempts){call.alertTimer=setInterval(alert,callAlertInterval);call.alertTimer.unref?.();}
   }
   function authenticate(socket,user){socket.data.user=user;socket.join('user:'+user);for(const r of list(user)){socket.join(r.id);presence(r.id);}}
   function leaveCall(socket,roomId){
     const call=calls.get(roomId);if(!call||!call.participants.has(socket.id))return;
     call.participants.delete(socket.id);socket.leave('call:'+call.id);socket.data.calls?.delete(roomId);
     io.to(roomId).emit('call:participant-left',{roomId,callId:call.id,socketId:socket.id,user:socket.data.user,participants:call.participants.size});
-    if(!call.participants.size){calls.delete(roomId);io.to(roomId).emit('call:ended',{roomId,callId:call.id});void notifyRoom(roomId,'',{type:'call-ended',tag:'call-'+call.id});}
+    if(!call.participants.size){stopCallAlerts(call);calls.delete(roomId);io.to(roomId).emit('call:ended',{roomId,callId:call.id});void notifyRoom(roomId,'',{type:'call-ended',tag:'call-'+call.id});}
   }
   io.on('connection',socket=>{
     let authPending=false;
@@ -210,11 +221,11 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
       if(throttle('call:'+socket.data.user,15))return ack({error:'Too many call actions. Wait a minute.'});
       let call=calls.get(p.roomId),created=false;
       if(p.expectedCallId&&call?.id!==p.expectedCallId)return ack({error:'This call has ended.'});
-      if(!call){call={id:randomUUID(),roomId:p.roomId,participants:new Map()};calls.set(p.roomId,call);created=true;}
+      if(!call){call={id:randomUUID(),roomId:p.roomId,participants:new Map(),alertTimer:null,alertCount:0};calls.set(p.roomId,call);created=true;}
       const existing=[...call.participants.entries()].map(([socketId,username])=>({socketId,username}));
       call.participants.set(socket.id,socket.data.user);socket.join('call:'+call.id);(socket.data.calls??=new Set()).add(p.roomId);
       socket.to(p.roomId).emit(created?'call:ring':'call:participant-joined',{roomId:p.roomId,callId:call.id,by:socket.data.user,socketId:socket.id,participants:call.participants.size});
-      if(created)void notifyRoom(p.roomId,socket.data.user,{type:'call',title:'Incoming call from @'+socket.data.user,body:'Tap to open Live Rooms and join',url:'/?room='+p.roomId+'&call='+encodeURIComponent(call.id),roomId:p.roomId,callId:call.id,tag:'call-'+call.id});
+      if(created)startCallAlerts(call,socket.data.user);else stopCallAlerts(call);
       ack({ok:true,callId:call.id,created,participants:existing});
     });
     handler('call:signal',(p,ack)=>{
@@ -227,6 +238,6 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
     handler('logout',(p,ack)=>{if(typeof p.token==='string')run('DELETE FROM sessions WHERE token=?',hashToken(p.token));ack({ok:true});socket.disconnect(true);});
     socket.on('disconnect',()=>{if(socket.data.calls)for(const roomId of [...socket.data.calls])leaveCall(socket,roomId);if(socket.data.user)for(const r of list(socket.data.user))presence(r.id);});
   });
-  server.on('close',()=>{clearInterval(cleanup);db.close();});return {app,server,io};
+  server.on('close',()=>{clearInterval(cleanup);for(const call of calls.values())stopCallAlerts(call);db.close();});return {app,server,io};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){const{server}=createChat();server.listen(Number(process.env.PORT)||3000,'0.0.0.0',()=>console.log(`Live Rooms: http://localhost:${process.env.PORT||3000}`));}

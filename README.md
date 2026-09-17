@@ -62,7 +62,9 @@ Example: `@gemini explain Java HashMap with a small example`.
 
 Click **Voice** inside any conversation and allow microphone access. Other online members in that chat see a join prompt. Audio travels over WebRTC; Socket.IO only relays the small offer, answer and ICE setup messages.
 
-After signing in, click **Allow** on the notification card so messages and incoming calls can alert you while the tab is in the background. Browser and phone notification settings control the final sound/vibration behavior. On iPhone/iPad, install the app from **Share → Add to Home Screen** before enabling Web Push.
+After signing in, click **Allow** on the notification card so messages and incoming calls can alert you while the tab is in the background. On Android Chrome, use **Install app**; if Chrome does not expose its install dialog, use **⋮ → Add to Home screen → Install**. On iPhone/iPad, install from **Share → Add to Home Screen** before enabling Web Push. Keep notifications and vibration enabled for Chrome/Live Rooms in Android settings; force-stopping Chrome also stops browser push delivery until Chrome is opened again.
+
+An unanswered incoming call sends a short sequence of high-priority notifications and uses the system notification sound/vibration. When Live Rooms is already open, it also shows the full-screen answer/decline view and plays the in-app ringtone. Browser PWAs cannot select a native phone ringtone or bypass Android silent/Do Not Disturb settings.
 
 ## Data and behavior
 
