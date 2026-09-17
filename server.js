@@ -4,9 +4,11 @@ import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual, cre
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { writeFile } from 'node:fs/promises';
+import { dirname,join,resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Server } from 'socket.io';
+import webpush from 'web-push';
 const scrypt=promisify(scryptCallback);
 
 export async function askGemini(history) {
@@ -23,7 +25,7 @@ export async function askGemini(history) {
   return text.slice(0,16000);
 }
 
-export function createChat({generate=askGemini,dbPath='data/chat.db'}={}) {
+export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotification}={}) {
   if(dbPath!==':memory:')mkdirSync(dirname(dbPath),{recursive:true});
   const db=new DatabaseSync(dbPath);
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
@@ -32,26 +34,75 @@ export function createChat({generate=askGemini,dbPath='data/chat.db'}={}) {
     CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, name TEXT NOT NULL, direct_key TEXT UNIQUE);
     CREATE TABLE IF NOT EXISTS memberships (room_id TEXT, username TEXT, PRIMARY KEY(room_id,username));
     CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, body TEXT NOT NULL, at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS push_subscriptions (endpoint TEXT PRIMARY KEY, username TEXT NOT NULL, subscription TEXT NOT NULL, updated INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS push_subscriptions_user ON push_subscriptions(username);
+    CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, uploader TEXT NOT NULL, file_name TEXT NOT NULL, mime TEXT NOT NULL, original_name TEXT NOT NULL, size INTEGER NOT NULL, message_id TEXT);
     CREATE INDEX IF NOT EXISTS messages_room ON messages(room_id,at);`);
   const sql=(q,...args)=>db.prepare(q).all(...args);
   const get=(q,...args)=>db.prepare(q).get(...args);
   const run=(q,...args)=>db.prepare(q).run(...args);
+  const hashToken=t=>createHash('sha256').update(t).digest('hex');
+  const sessionUser=req=>{const token=req.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];return token?get('SELECT username FROM sessions WHERE token=? AND expires>?',hashToken(token),Date.now())?.username:null;};
+  let vapid=get('SELECT value FROM settings WHERE key=?','vapid');
+  if(!vapid){vapid={value:JSON.stringify(webpush.generateVAPIDKeys())};run('INSERT INTO settings VALUES (?,?)','vapid',vapid.value);}
+  const vapidKeys=JSON.parse(vapid.value);
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT||'mailto:admin@live-rooms.app',vapidKeys.publicKey,vapidKeys.privateKey);
+  const deliverPush=pushNotification||((subscription,payload,options)=>webpush.sendNotification(subscription,JSON.stringify(payload),options));
+  const mediaRoot=resolve(dirname(dbPath===':memory:'?'data/chat.db':dbPath),'uploads');mkdirSync(mediaRoot,{recursive:true});
   const app=express(),server=createServer(app);
   app.disable('x-powered-by');app.use((req,res,next)=>{
-    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'");
+    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'");
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');next();
   });
   app.get('/api/health',(_,res)=>res.json({ok:true,aiConfigured:Boolean(process.env.GEMINI_API_KEY)}));
+  app.get('/api/push/public-key',(_,res)=>res.json({publicKey:vapidKeys.publicKey}));
+  app.post('/api/push/subscribe',express.json({limit:'32kb'}),(req,res)=>{
+    const username=sessionUser(req),subscription=req.body;
+    if(!username)return res.status(401).json({error:'Sign in again to enable notifications.'});
+    if(!subscription?.endpoint||typeof subscription.endpoint!=='string'||subscription.endpoint.length>2048||!subscription.keys?.p256dh||!subscription.keys?.auth)return res.status(400).json({error:'Invalid notification subscription.'});
+    run('INSERT INTO push_subscriptions VALUES (?,?,?,?) ON CONFLICT(endpoint) DO UPDATE SET username=excluded.username,subscription=excluded.subscription,updated=excluded.updated',subscription.endpoint,username,JSON.stringify(subscription),Date.now());
+    res.json({ok:true});
+  });
+  app.delete('/api/push/subscribe',express.json({limit:'8kb'}),(req,res)=>{
+    const username=sessionUser(req);
+    if(!username)return res.status(401).json({error:'Sign in again.'});
+    if(typeof req.body?.endpoint==='string')run('DELETE FROM push_subscriptions WHERE endpoint=? AND username=?',req.body.endpoint,username);
+    res.json({ok:true});
+  });
+  const allowedMedia=new Map([['image/jpeg','.jpg'],['image/png','.png'],['image/webp','.webp'],['image/gif','.gif'],['audio/webm','.webm'],['audio/ogg','.ogg'],['audio/mpeg','.mp3'],['audio/mp4','.m4a'],['audio/x-m4a','.m4a'],['audio/aac','.aac'],['audio/wav','.wav']]);
+  app.post('/api/media/:roomId',express.raw({type:[...allowedMedia.keys()],limit:'8mb'}),async(req,res)=>{
+    const username=sessionUser(req),roomId=req.params.roomId,mime=req.headers['content-type']?.split(';')[0]?.toLowerCase();
+    if(!username)return res.status(401).json({error:'Sign in again before uploading.'});
+    if(!get('SELECT 1 FROM memberships WHERE room_id=? AND username=?',roomId,username))return res.status(403).json({error:'Join this chat before uploading.'});
+    if(!allowedMedia.has(mime)||!Buffer.isBuffer(req.body)||!req.body.length)return res.status(400).json({error:'Choose a supported image or audio file.'});
+    const id=randomUUID(),fileName=id+allowedMedia.get(mime);let originalName='attachment';
+    try{originalName=decodeURIComponent(String(req.headers['x-file-name']||originalName)).replace(/[\r\n]/g,' ').slice(0,120)||originalName;}catch{}
+    await writeFile(join(mediaRoot,fileName),req.body,{flag:'wx'});
+    run('INSERT INTO media(id,room_id,uploader,file_name,mime,original_name,size) VALUES (?,?,?,?,?,?,?)',id,roomId,username,fileName,mime,originalName,req.body.length);
+    const attachment={id,type:mime.startsWith('image/')?'image':'audio',mime,name:originalName,size:req.body.length};
+    const message=append(roomId,{name:username,senderId:username,text:'',kind:'user',attachment});
+    run('UPDATE media SET message_id=? WHERE id=?',message.id,id);void notifyRoom(roomId,username,{type:'message',title:'@'+username,body:attachment.type==='image'?'Sent a photo':'Sent an audio message',url:'/?room='+roomId,roomId,tag:'message-'+message.id});
+    res.status(201).json({ok:true,message});
+  });
+  app.get('/api/media/:id',(req,res)=>{
+    const username=sessionUser(req),row=get('SELECT * FROM media WHERE id=?',req.params.id);
+    if(!username)return res.status(401).end();
+    if(!row||!get('SELECT 1 FROM memberships WHERE room_id=? AND username=?',row.room_id,username))return res.status(404).end();
+    const stored=row.message_id&&get('SELECT body FROM messages WHERE id=?',row.message_id);
+    if(!stored||JSON.parse(stored.body).deleted)return res.status(404).end();
+    res.setHeader('Cache-Control','private,max-age=86400');res.type(row.mime);res.sendFile(join(mediaRoot,row.file_name));
+  });
   app.use(express.static(fileURLToPath(new URL('./public',import.meta.url)),{
     etag:false,maxAge:0,setHeaders:res=>res.setHeader('Cache-Control','no-store')
   }));
+  app.use((error,req,res,next)=>{if(error?.type==='entity.too.large')return res.status(413).json({error:'Keep each image or audio file under 8 MB.'});next(error);});
   const io=new Server(server,{maxHttpBufferSize:16384,allowRequest:(req,callback)=>{
     const origin=req.headers.origin;let valid=!origin;
     try{valid ||= process.env.APP_ORIGIN?origin===process.env.APP_ORIGIN:new URL(origin).host===req.headers.host;}catch{}
     callback(null,valid);
   }});
   const busy=new Set(),lastAI=new Map(),limits=new Map(),calls=new Map();let aiActive=0,aiWindow=Date.now(),aiRequests=0;
-  const hashToken=t=>createHash('sha256').update(t).digest('hex');
   function throttle(key,max,window=60000){const now=Date.now();let entry=limits.get(key);if(!entry||now-entry.at>window){entry={at:now,n:0};limits.set(key,entry);}return ++entry.n>max;}
   const cleanup=setInterval(()=>{for(const [k,v]of limits)if(Date.now()-v.at>60000)limits.delete(k);run('DELETE FROM sessions WHERE expires < ?',Date.now());},60000);cleanup.unref();
   const hasRoom=(id,user)=>Boolean(get('SELECT 1 FROM memberships WHERE room_id=? AND username=?',id,user));
@@ -62,12 +113,16 @@ export function createChat({generate=askGemini,dbPath='data/chat.db'}={}) {
   function joinUser(user,id){run('INSERT OR IGNORE INTO memberships VALUES (?,?)',id,user);for(const s of io.sockets.sockets.values())if(s.data.user===user)s.join(id);refresh(user);presence(id);}
   function snapshot(id,user){return {...list(user).find(x=>x.id===id),messages:sql('SELECT body FROM messages WHERE room_id=? ORDER BY at DESC,rowid DESC LIMIT 100',id).reverse().map(x=>JSON.parse(x.body)),thinking:busy.has(id),members:members(id)};}
   function append(id,message){const m={id:randomUUID(),roomId:id,at:Date.now(),...message};run('INSERT INTO messages VALUES (?,?,?,?)',m.id,id,JSON.stringify(m),m.at);run('DELETE FROM messages WHERE room_id=? AND id NOT IN (SELECT id FROM messages WHERE room_id=? ORDER BY at DESC,rowid DESC LIMIT 100)',id,id);io.to(id).emit('message',m);return m;}
+  async function notifyRoom(roomId,excludeUser,payload){
+    const subscriptions=sql('SELECT p.endpoint,p.subscription FROM push_subscriptions p JOIN memberships m ON m.username=p.username WHERE m.room_id=? AND p.username<>?',roomId,excludeUser||'');
+    await Promise.allSettled(subscriptions.map(async row=>{try{await deliverPush(JSON.parse(row.subscription),payload,{TTL:payload.type==='call'?60:86400,urgency:payload.type==='call'?'high':'normal',topic:String(payload.tag||'live-rooms').slice(0,32)});}catch(error){if(error?.statusCode===404||error?.statusCode===410)run('DELETE FROM push_subscriptions WHERE endpoint=?',row.endpoint);}}));
+  }
   function authenticate(socket,user){socket.data.user=user;socket.join('user:'+user);for(const r of list(user)){socket.join(r.id);presence(r.id);}}
   function leaveCall(socket,roomId){
     const call=calls.get(roomId);if(!call||!call.participants.has(socket.id))return;
     call.participants.delete(socket.id);socket.leave('call:'+call.id);socket.data.calls?.delete(roomId);
     io.to(roomId).emit('call:participant-left',{roomId,callId:call.id,socketId:socket.id,user:socket.data.user,participants:call.participants.size});
-    if(!call.participants.size){calls.delete(roomId);io.to(roomId).emit('call:ended',{roomId,callId:call.id});}
+    if(!call.participants.size){calls.delete(roomId);io.to(roomId).emit('call:ended',{roomId,callId:call.id});void notifyRoom(roomId,'',{type:'call-ended',tag:'call-'+call.id});}
   }
   io.on('connection',socket=>{
     let authPending=false;
@@ -133,6 +188,7 @@ export function createChat({generate=askGemini,dbPath='data/chat.db'}={}) {
       const mention=/(^|\s)@gemini\b/i.test(p.text);
       if(mention){if(Date.now()-aiWindow>60000){aiWindow=Date.now();aiRequests=0;}if(busy.has(p.roomId)||Date.now()-(lastAI.get(p.roomId)||0)<5000||aiActive>=4||aiRequests>=20)return ack({error:'Gemini is busy. Try again shortly.'});}
       const m=append(p.roomId,{id:socket.data.user+':'+p.clientId,name:socket.data.user,senderId:socket.data.user,text:p.text.trim(),kind:'user'});ack({ok:true,message:m});
+      void notifyRoom(p.roomId,socket.data.user,{type:'message',title:'@'+socket.data.user,body:m.text.slice(0,180),url:'/?room='+p.roomId,roomId:p.roomId,tag:'message-'+m.id});
       if(!mention)return;
       busy.add(p.roomId);lastAI.set(p.roomId,Date.now());aiActive++;aiRequests++;
       io.to(p.roomId).emit('thinking',{roomId:p.roomId,busy:true});
@@ -153,10 +209,12 @@ export function createChat({generate=askGemini,dbPath='data/chat.db'}={}) {
       if(typeof p.roomId!=='string'||!hasRoom(p.roomId,socket.data.user))return ack({error:'Join this chat before starting a call.'});
       if(throttle('call:'+socket.data.user,15))return ack({error:'Too many call actions. Wait a minute.'});
       let call=calls.get(p.roomId),created=false;
+      if(p.expectedCallId&&call?.id!==p.expectedCallId)return ack({error:'This call has ended.'});
       if(!call){call={id:randomUUID(),roomId:p.roomId,participants:new Map()};calls.set(p.roomId,call);created=true;}
       const existing=[...call.participants.entries()].map(([socketId,username])=>({socketId,username}));
       call.participants.set(socket.id,socket.data.user);socket.join('call:'+call.id);(socket.data.calls??=new Set()).add(p.roomId);
       socket.to(p.roomId).emit(created?'call:ring':'call:participant-joined',{roomId:p.roomId,callId:call.id,by:socket.data.user,socketId:socket.id,participants:call.participants.size});
+      if(created)void notifyRoom(p.roomId,socket.data.user,{type:'call',title:'Incoming call from @'+socket.data.user,body:'Tap to open Live Rooms and join',url:'/?room='+p.roomId+'&call='+encodeURIComponent(call.id),roomId:p.roomId,callId:call.id,tag:'call-'+call.id});
       ack({ok:true,callId:call.id,created,participants:existing});
     });
     handler('call:signal',(p,ack)=>{
