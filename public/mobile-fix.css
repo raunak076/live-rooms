@@ -1,0 +1,42 @@
+/* Mobile visibility guard for the original login -> contacts -> chat flow. */
+@media (max-width: 760px) {
+  body {
+    min-height: 100svh;
+    background: #f3f6f5;
+  }
+
+  .shell {
+    min-height: 100svh;
+  }
+
+  aside {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
+    min-height: 68px;
+  }
+
+  main {
+    display: block !important;
+    flex: 1;
+    width: 100%;
+    min-height: calc(100svh - 68px);
+    padding: 24px 16px;
+    overflow: visible;
+  }
+
+  #auth-panel,
+  #lobby,
+  #chat {
+    margin: 0 auto;
+  }
+
+  #auth-panel:not([hidden]),
+  #lobby:not([hidden]) {
+    display: block !important;
+  }
+
+  #chat:not([hidden]) {
+    display: flex !important;
+  }
+}
