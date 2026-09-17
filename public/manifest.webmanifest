@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Live Rooms",
-  "short_name": "Live Rooms",
+  "name": "Live Chat",
+  "short_name": "Live Chat",
   "description": "Realtime rooms, private chat, voice calls, photos and voice notes.",
   "lang": "en",
   "start_url": "/",
