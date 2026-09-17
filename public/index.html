@@ -11,11 +11,11 @@
   <link rel="icon" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/style.css?v=chat-media-pwa-1">
-  <link rel="stylesheet" href="/mobile-fix.css?v=chat-media-pwa-1">
-  <link rel="stylesheet" href="/features.css?v=chat-media-pwa-1">
+  <link rel="stylesheet" href="/style.css?v=android-push-call-2">
+  <link rel="stylesheet" href="/mobile-fix.css?v=android-push-call-2">
+  <link rel="stylesheet" href="/features.css?v=android-push-call-2">
   <script defer src="/socket.io/socket.io.js"></script>
-  <script defer src="/app.js?v=chat-media-pwa-1"></script>
+  <script defer src="/app.js?v=android-push-call-2"></script>
 </head>
 <body>
   <div class="shell">
@@ -67,7 +67,6 @@
           <div class="actions"><button id="voice-call" class="call-button" type="button" aria-label="Start voice call">☎ Voice</button><button id="invite" class="secondary">Copy invite</button><button id="leave" class="plain">All chats</button></div>
         </header>
         <div class="member-bar"><span id="members"></span><span class="ai-label">✦ @gemini is a mention away</span></div>
-        <div id="call-banner" class="call-banner" role="status" hidden><div><span class="call-pulse"></span><strong id="call-title">Incoming voice call</strong><small id="call-subtitle"></small></div><div class="call-actions"><button id="decline-call" type="button" class="call-danger">Decline</button><button id="join-call" type="button">Join call</button></div></div>
         <div id="active-call" class="active-call call-screen" role="dialog" aria-modal="true" aria-label="Voice call" hidden>
           <div class="call-screen-top"><span class="call-pulse"></span><span id="call-status">Calling…</span></div>
           <div class="call-person"><div id="call-avatar" class="call-avatar" aria-hidden="true">#</div><h2 id="call-peer">Voice call</h2><span id="call-time">00:00</span><small id="call-participants">1 participant</small></div>
@@ -85,6 +84,10 @@
         </form>
         <p class="chat-note">Calls and voice notes use your microphone. AI may make mistakes. Mentioning @gemini shares recent room context with Google.</p>
       </section>
+      <div id="call-banner" class="call-banner incoming-call-screen" role="dialog" aria-modal="true" aria-label="Incoming voice call" hidden>
+        <div class="incoming-call-person"><span class="call-pulse"></span><div id="incoming-call-avatar" class="call-avatar" aria-hidden="true">#</div><strong id="call-title">Incoming voice call</strong><small id="call-subtitle"></small></div>
+        <div class="call-actions"><button id="decline-call" type="button" class="call-danger">Decline</button><button id="join-call" type="button">Answer</button></div>
+      </div>
       <p id="notice" role="alert" hidden></p>
     </main>
   </div>

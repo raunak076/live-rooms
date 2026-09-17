@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id),socket=io({transports:['websocket','polling'],tryAllTransports:true});
 let currentRoom=null,user=null,chats=[],sending=false,token='',typingTimer,lastTyped=0,pendingRetry=null;
 let activeCall=null,incomingCall=null,localStream=null,callTimer=null,callStartedAt=0,speakerEnabled=true;
-let swRegistration=null,installPrompt=null,notificationsEnabled=false,uploading=false,mediaRecorder=null,recordingStream=null,recordingTimer=null,ringContext=null,ringInterval=null,pendingOpen=null;
+let swRegistration=null,installPrompt=null,notificationsEnabled=false,uploading=false,mediaRecorder=null,recordingStream=null,recordingTimer=null,ringContext=null,ringInterval=null,ringVibrateInterval=null,pendingOpen=null;
 const peers=new Map(),iceServers=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
 const drafts=new Map(),unread=new Map(),mediaUrls=new Map(),params=new URLSearchParams(location.search),inviteCode=params.get('room'),requestedCallId=params.get('call');
 try{
@@ -18,13 +18,17 @@ function clearNotice(){$('notice').hidden=true;}
 function base64Key(value){const padding='='.repeat((4-value.length%4)%4),raw=atob((value+padding).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(raw,c=>c.charCodeAt(0));}
 function unlockRingtone(){if(!window.AudioContext&&!window.webkitAudioContext)return;ringContext??=new (window.AudioContext||window.webkitAudioContext)();if(ringContext.state==='suspended')ringContext.resume().catch(()=>{});}
 function ringOnce(){if(!ringContext||ringContext.state!=='running')return;for(const delay of [0,.42]){const oscillator=ringContext.createOscillator(),gain=ringContext.createGain(),at=ringContext.currentTime+delay;oscillator.frequency.value=760;gain.gain.setValueAtTime(.0001,at);gain.gain.exponentialRampToValueAtTime(.13,at+.03);gain.gain.exponentialRampToValueAtTime(.0001,at+.28);oscillator.connect(gain).connect(ringContext.destination);oscillator.start(at);oscillator.stop(at+.3);}}
-function startRingtone(){stopRingtone();unlockRingtone();ringOnce();ringInterval=setInterval(ringOnce,1900);navigator.vibrate?.([500,220,500,700]);}
-function stopRingtone(){clearInterval(ringInterval);ringInterval=null;navigator.vibrate?.(0);}
+function vibrateCall(){navigator.vibrate?.([700,250,700,650]);}
+function startRingtone(){stopRingtone();unlockRingtone();ringOnce();vibrateCall();ringInterval=setInterval(ringOnce,1900);ringVibrateInterval=setInterval(vibrateCall,2400);}
+function stopRingtone(){clearInterval(ringInterval);clearInterval(ringVibrateInterval);ringInterval=null;ringVibrateInterval=null;navigator.vibrate?.(0);}
 async function authFetch(url,options={}){const headers=new Headers(options.headers||{});headers.set('Authorization','Bearer '+token);return fetch(url,{...options,headers});}
+function subscriptionUsesKey(subscription,publicKey){const current=subscription?.options?.applicationServerKey;if(!current)return false;const actual=new Uint8Array(current),expected=base64Key(publicKey);return actual.length===expected.length&&actual.every((value,index)=>value===expected[index]);}
 async function enablePush(){
   unlockRingtone();if(!swRegistration||!('Notification'in window)||!('PushManager'in window))throw new Error('Notifications are not supported in this browser.');
   const permission=await Notification.requestPermission();if(permission!=='granted')throw new Error('Notification permission was not allowed. You can enable it later in browser settings.');
-  const {publicKey}=await fetch('/api/push/public-key').then(r=>r.json());let subscription=await swRegistration.pushManager.getSubscription();
+  const keyResponse=await fetch('/api/push/public-key',{cache:'no-store'});if(!keyResponse.ok)throw new Error('Notification service is unavailable. Please retry.');
+  const {publicKey}=await keyResponse.json();let subscription=await swRegistration.pushManager.getSubscription();
+  if(subscription&&!subscriptionUsesKey(subscription,publicKey)){await subscription.unsubscribe();subscription=null;}
   subscription??=await swRegistration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64Key(publicKey)});
   const response=await authFetch('/api/push/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(subscription)});if(!response.ok)throw new Error((await response.json()).error||'Could not enable notifications.');
   notificationsEnabled=true;$('notification-prompt').hidden=true;
@@ -32,11 +36,11 @@ async function enablePush(){
 async function showLocalNotification(payload){if(!notificationsEnabled||!swRegistration||Notification.permission!=='granted')return;await swRegistration.showNotification(payload.title||'Live Rooms',{body:payload.body||'',icon:'/favicon.svg',badge:'/favicon.svg',tag:payload.tag||'live-rooms',data:{roomId:payload.roomId,callId:payload.callId,type:payload.type,url:payload.url||'/'}}).catch(()=>{});}
 function promptForNotifications(){if(!user||!('Notification'in window)||!('PushManager'in window))return;if(Notification.permission==='granted'){enablePush().catch(()=>{});return;}$('notification-prompt').hidden=Notification.permission==='denied';}
 async function setupPwa(){
-  if('serviceWorker'in navigator){try{swRegistration=await navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'});await navigator.serviceWorker.ready;if(user)promptForNotifications();}catch{}}
-  const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true,isIos=/iphone|ipad|ipod/i.test(navigator.userAgent);
-  if(isIos&&!standalone)$('install-app').hidden=false;
+  if('serviceWorker'in navigator){try{await navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'});swRegistration=await navigator.serviceWorker.ready;if(user)promptForNotifications();}catch{}}
+  const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true,isMobile=/android|iphone|ipad|ipod/i.test(navigator.userAgent);
+  $('install-app').hidden=standalone||(!isMobile&&!installPrompt);
 }
-window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;$('install-app').hidden=false;});
+window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;if(!matchMedia('(display-mode: standalone)').matches)$('install-app').hidden=false;});
 window.addEventListener('appinstalled',()=>{$('install-app').hidden=true;installPrompt=null;});
 document.addEventListener('pointerdown',unlockRingtone,{once:true});
 setupPwa();
@@ -134,7 +138,11 @@ function showRoom(room){
   history.replaceState(null,'',room.direct?'/':'?room='+room.id);drawChats();$('message').focus();
 }
 async function enter(payload){clearNotice();const result=await rpc('enter',payload);showRoom(result.room);}
-function showIncomingCall(payload){if(activeCall)return;incomingCall=payload;$('call-title').textContent='Incoming voice call';$('call-subtitle').textContent=payload.by?'@'+payload.by+' is calling':'Tap Join call to answer';$('call-banner').hidden=false;startRingtone();}
+function showIncomingCall(payload){
+  if(activeCall||!payload?.roomId)return;incomingCall=payload;const caller=payload.by?'@'+payload.by:'Live Rooms';
+  $('call-title').textContent=caller;$('call-subtitle').textContent='Incoming voice call';$('incoming-call-avatar').textContent=(payload.by||'#').charAt(0).toUpperCase();$('call-banner').hidden=false;startRingtone();
+}
+async function answerIncomingCall(){const call=incomingCall;if(!call)return;if(currentRoom?.id!==call.roomId)await enter({roomId:call.roomId});incomingCall=call;await joinVoiceCall();}
 async function openRoomFromNotification(request){
   if(!request?.roomId)return;if(!user){pendingOpen=request;return;}
   try{if(currentRoom?.id!==request.roomId)await enter({roomId:request.roomId});if(request.joinCall){showIncomingCall({roomId:request.roomId,callId:request.callId});}}catch(error){notice(error.message);}
@@ -160,7 +168,7 @@ socket.on('deleted',m=>renderMessage(m));
 socket.on('members',p=>{if(p.roomId===currentRoom?.id)$('members').textContent=p.members.length+' online · '+p.members.map(u=>'@'+u).join(', ');});
 socket.on('thinking',p=>{if(p.roomId===currentRoom?.id)$('thinking').hidden=!p.busy;});
 socket.on('typing',p=>{if(p.roomId!==currentRoom?.id)return;$('typing').textContent='@'+p.user+' is typing…';$('typing').hidden=false;clearTimeout(typingTimer);typingTimer=setTimeout(()=>$('typing').hidden=true,2200);});
-socket.on('call:ring',p=>{if(activeCall)return;if(p.roomId===currentRoom?.id)showIncomingCall(p);else if(document.visibilityState==='visible')showLocalNotification({type:'call',title:'Incoming call from @'+p.by,body:'Tap to open and join',roomId:p.roomId,callId:p.callId,url:'/?room='+p.roomId+'&call='+p.callId,tag:'call-'+p.callId});});
+socket.on('call:ring',p=>{if(!activeCall)showIncomingCall(p);});
 socket.on('call:participant-joined',p=>{if(activeCall?.callId===p.callId){$('call-status').textContent='Connected';updateCallCount(Math.max(p.participants,peers.size+1));}else if(!activeCall&&p.roomId===currentRoom?.id){incomingCall=p;$('call-title').textContent='Voice call in progress';$('call-subtitle').textContent='Join '+p.participants+' participant'+(p.participants===1?'':'s');$('call-banner').hidden=false;startRingtone();}});
 socket.on('call:participant-left',p=>{if(activeCall?.callId!==p.callId)return;closePeer(p.socketId);updateCallCount(Math.max(p.participants,peers.size+1));});
 socket.on('call:ended',p=>{if(activeCall?.callId===p.callId){resetCallUi();notice('Voice call ended.');}else if(incomingCall?.callId===p.callId){stopRingtone();incomingCall=null;$('call-banner').hidden=true;}});
@@ -187,15 +195,20 @@ $('attach-audio').onclick=()=>$('audio-picker').click();
 for(const id of ['image-picker','audio-picker'])$(id).onchange=event=>{const file=event.target.files?.[0];event.target.value='';if(file)uploadMedia(file).catch(error=>notice(error.message));};
 $('record-audio').onclick=()=>{if(mediaRecorder?.state==='recording')stopVoiceNote();else startVoiceNote().catch(error=>notice(error.name==='NotAllowedError'?'Microphone permission is required for voice notes.':error.message));};
 $('voice-call').onclick=()=>{if(activeCall)return;joinVoiceCall().catch(e=>notice(e.name==='NotAllowedError'?'Microphone permission is required for voice calls.':e.message));};
-$('join-call').onclick=()=>joinVoiceCall().catch(e=>notice(e.name==='NotAllowedError'?'Microphone permission is required for voice calls.':e.message));
+$('join-call').onclick=()=>answerIncomingCall().catch(e=>notice(e.name==='NotAllowedError'?'Microphone permission is required for voice calls.':e.message));
 $('decline-call').onclick=()=>{stopRingtone();incomingCall=null;$('call-banner').hidden=true;};
 $('speaker-call').onclick=()=>{speakerEnabled=!speakerEnabled;for(const audio of $('remote-audio').querySelectorAll('audio'))audio.muted=!speakerEnabled;$('speaker-label').textContent=speakerEnabled?'Speaker':'Speaker off';$('speaker-call').classList.toggle('speaker-off',!speakerEnabled);$('speaker-call').setAttribute('aria-pressed',String(speakerEnabled));};
 $('mute-call').onclick=()=>{if(!localStream)return;const enabled=!localStream.getAudioTracks()[0]?.enabled;localStream.getAudioTracks().forEach(track=>track.enabled=enabled);$('mute-label').textContent=enabled?'Mute':'Unmute';$('mute-call').classList.toggle('muted',!enabled);$('mute-call').setAttribute('aria-pressed',String(!enabled));};
 $('end-call').onclick=()=>leaveVoiceCall();
 $('invite').onclick=async()=>{try{await navigator.clipboard.writeText(location.origin+'/?room='+currentRoom.id);$('invite').textContent='Copied!';setTimeout(()=>$('invite').textContent='Copy invite',2000);}catch{notice('Copy this invite: '+location.origin+'/?room='+currentRoom.id);}};
 $('leave').onclick=$('new-chat').onclick=()=>{showLobby();clearNotice();};
-$('install-app').onclick=async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$('install-app').hidden=true;}else notice('On iPhone/iPad: tap Share, then “Add to Home Screen”.');};
+$('install-app').onclick=async()=>{
+  if(installPrompt){installPrompt.prompt();const choice=await installPrompt.userChoice;if(choice.outcome==='accepted')$('install-app').hidden=true;installPrompt=null;return;}
+  if(/android/i.test(navigator.userAgent))notice('In Chrome, tap ⋮ menu → Add to Home screen → Install. If missing, update Chrome and do not use Incognito mode.');
+  else notice('On iPhone/iPad: tap Share, then “Add to Home Screen”.');
+};
 $('enable-notifications').onclick=()=>enablePush().then(()=>notice('Notifications are on for messages and calls.')).catch(error=>notice(error.message));
 $('dismiss-notifications').onclick=()=>{$('notification-prompt').hidden=true;};
-navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type==='open-room')openRoomFromNotification(event.data);});
+navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type==='open-room')openRoomFromNotification(event.data);else if(event.data?.type==='push-received'&&event.data.payload?.type==='call')showIncomingCall(event.data.payload);});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&user&&'Notification'in window&&Notification.permission==='granted')enablePush().catch(()=>{});});
 $('logout').onclick=async()=>{if(activeCall)await leaveVoiceCall();try{const subscription=await swRegistration?.pushManager.getSubscription();if(subscription){await authFetch('/api/push/subscribe',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:subscription.endpoint})});await subscription.unsubscribe();}}catch{}try{await rpc('logout',{token});}catch{}try{localStorage.removeItem('lr-token');}catch{}location.href='/';};

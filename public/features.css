@@ -44,6 +44,69 @@
   padding: 9px 12px;
 }
 
+.incoming-call-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  width: 100%;
+  height: 100dvh;
+  margin: 0;
+  padding: max(34px, env(safe-area-inset-top)) 22px max(42px, env(safe-area-inset-bottom));
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(165deg, #153f37 0%, #0b2924 58%, #071b18 100%);
+  color: #fff;
+  box-shadow: none;
+}
+
+.incoming-call-screen .incoming-call-person {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.incoming-call-screen .call-pulse {
+  position: absolute;
+  top: max(28px, env(safe-area-inset-top));
+}
+
+.incoming-call-screen .call-avatar {
+  margin-bottom: 18px;
+}
+
+.incoming-call-screen strong {
+  color: #fff;
+  font-size: clamp(28px, 8vw, 42px);
+}
+
+.incoming-call-screen small {
+  color: #b9d0c8;
+  font-size: 16px;
+}
+
+.incoming-call-screen .call-actions {
+  width: min(330px, 100%);
+  justify-content: space-between;
+}
+
+.incoming-call-screen .call-actions button {
+  width: 88px;
+  min-height: 88px;
+  padding: 12px;
+  border-radius: 50%;
+}
+
+.incoming-call-screen #join-call {
+  background: #32a86b;
+}
+
 .composer-row {
   display: flex;
   align-items: flex-end;
