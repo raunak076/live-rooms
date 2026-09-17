@@ -1,5 +1,5 @@
-const CACHE='live-rooms-shell-v3';
-const SHELL=['/','/style.css?v=chat-media-pwa-1','/mobile-fix.css?v=chat-media-pwa-1','/features.css?v=chat-media-pwa-1','/app.js?v=chat-media-pwa-1','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png'];
+const CACHE='live-rooms-shell-v4';
+const SHELL=['/','/style.css?v=chat-media-pwa-1','/mobile-fix.css?v=chat-media-pwa-1','/features.css?v=chat-media-pwa-1','/app.js?v=chat-media-pwa-1','/platform-fixes.js?v=mobile-alerts-2','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png'];
 
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
@@ -17,9 +17,19 @@ self.addEventListener('push',event=>{
     const focused=clients.some(client=>client.focused||client.visibilityState==='visible');
     for(const client of clients)client.postMessage({type:'push-received',payload:data});
     if(focused&&data.type!=='call')return;
+    const isCall=data.type==='call';
     await self.registration.showNotification(data.title||'Live Rooms',{
-      body:data.body||'',icon:'/icon-192.png',badge:'/icon-192.png',tag:data.tag||'live-rooms',renotify:data.type==='call',requireInteraction:data.type==='call',vibrate:data.type==='call'?[600,250,600,800]:[150,80,150],
-      data:{url:data.url||'/',roomId:data.roomId,callId:data.callId,type:data.type},actions:data.type==='call'?[{action:'join',title:'Join'},{action:'decline',title:'Decline'}]:[{action:'open',title:'Open'}]
+      body:data.body||'',
+      icon:'/icon-192.png',
+      badge:'/icon-192.png',
+      tag:data.tag||'live-rooms',
+      renotify:isCall,
+      requireInteraction:isCall,
+      silent:false,
+      timestamp:Date.now(),
+      vibrate:isCall?[700,250,700,250,900]:[180,80,180],
+      data:{url:data.url||'/',roomId:data.roomId,callId:data.callId,type:data.type},
+      actions:isCall?[{action:'join',title:'Join'},{action:'decline',title:'Decline'}]:[{action:'open',title:'Open'}]
     });
   })());
 });
