@@ -50,6 +50,9 @@ Get a key at https://aistudio.google.com/apikey. The model is configurable: use 
 - Optimistic message rendering, server acknowledgements and duplicate suppression for retries of retained messages.
 - Online members, typing indicators and Gemini thinking feedback.
 - Low-latency WebRTC voice calls in group rooms and private chats, with incoming-call prompts, mute, call duration, participant count and clean hang-up handling.
+- Installable PWA experience on supported desktop and mobile browsers, with an iPhone/iPad Add to Home Screen hint.
+- Permission-based Web Push notifications for new messages and incoming calls, including system notification sound/vibration when the OS and browser allow it.
+- Authenticated image, audio-file and recorded voice-note sharing (up to 8 MB per attachment).
 - `@gemini` mentions trigger an AI answer in the same room; ordinary messages do not call AI.
 - Delete your own messages for everyone. The server checks ownership and replaces retained content with a tombstone.
 - SQLite persistence for accounts, hashed sessions, room membership and the most recent 100 messages per chat.
@@ -59,6 +62,8 @@ Example: `@gemini explain Java HashMap with a small example`.
 
 Click **Voice** inside any conversation and allow microphone access. Other online members in that chat see a join prompt. Audio travels over WebRTC; Socket.IO only relays the small offer, answer and ICE setup messages.
 
+After signing in, click **Allow** on the notification card so messages and incoming calls can alert you while the tab is in the background. Browser and phone notification settings control the final sound/vibration behavior. On iPhone/iPad, install the app from **Share → Add to Home Screen** before enabling Web Push.
+
 ## Data and behavior
 
 Each AI mention sends up to 20 recent, non-deleted messages from that chat to Google. Its reply is visible to everyone in the chat. Deleting a message removes its text from the application's retained history, but cannot retract data already seen by participants, sent to Google, copied, or included in an earlier AI response. Database backups and SQLite WAL pages are not secure-erased by a deletion. Pending AI replies are suppressed when their trigger message was deleted before completion.
@@ -66,6 +71,8 @@ Each AI mention sends up to 20 recent, non-deleted messages from that chat to Go
 Room invites grant access to anyone signed in who has the link. DMs cannot be joined by outsiders, even if their ID is known. This is not end-to-end encrypted chat: the server stores message text and can read it. Session tokens are stored in browser local storage and only their hashes are stored in SQLite. Sign out revokes the current token. No password-reset or account-deletion flow is included.
 
 This version retains 100 messages per conversation. Older messages are automatically removed. Rooms and contacts remain across server restarts. Unread badges are per active browser session, not durable read receipts. Presence means connected to the service, not necessarily currently viewing that conversation.
+
+Uploaded media is stored under the persistent `data/uploads` directory and is served only after session and room-membership checks. Deleting its chat message makes the media endpoint unavailable, although the underlying file is retained for operational recovery.
 
 ## Hosting
 
