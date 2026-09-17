@@ -3,7 +3,14 @@ let currentRoom=null,user=null,chats=[],sending=false,token='',typingTimer,lastT
 let activeCall=null,incomingCall=null,localStream=null,callTimer=null,callStartedAt=0;
 const peers=new Map(),iceServers=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
 const drafts=new Map(),unread=new Map(),inviteCode=new URLSearchParams(location.search).get('room');
-try{token=localStorage.getItem('lr-token')||'';}catch{}
+try{
+  const uiVersion='first-voice-flow-2';
+  if(localStorage.getItem('lr-ui-version')!==uiVersion){
+    localStorage.removeItem('lr-token');
+    localStorage.setItem('lr-ui-version',uiVersion);
+  }
+  token=localStorage.getItem('lr-token')||'';
+}catch{}
 if(inviteCode)$('room-code').value=inviteCode;
 function notice(text){$('notice').textContent=text;$('notice').hidden=false;}
 function clearNotice(){$('notice').hidden=true;}
