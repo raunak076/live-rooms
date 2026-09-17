@@ -1,0 +1,178 @@
+.install-button {
+  width: 100%;
+  margin-top: 22px;
+  color: #18412d;
+  background: #c9eda7;
+}
+
+.permission-card {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  z-index: 120;
+  width: min(620px, calc(100vw - 28px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 16px;
+  transform: translateX(-50%);
+  border: 1px solid #bad3c7;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 14px 40px #102e2425;
+}
+
+.permission-card > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.permission-card span {
+  color: #60756c;
+  font-size: 13px;
+}
+
+.permission-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 7px;
+}
+
+.permission-actions button {
+  padding: 9px 12px;
+}
+
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+}
+
+.composer-row textarea {
+  flex: 1;
+  min-width: 0;
+}
+
+.media-button {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  color: #24594b;
+  background: #edf4ef;
+  font-size: 18px;
+}
+
+.media-button.recording {
+  color: #fff;
+  background: #d94b4b;
+  animation: record-pulse 1s infinite;
+}
+
+.composer-row #send {
+  flex: 0 0 auto;
+}
+
+.attachment {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.attachment:first-child {
+  margin-top: 0;
+}
+
+.attachment img {
+  display: block;
+  width: min(420px, 100%);
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: 9px;
+  background: #eef3f0;
+}
+
+.attachment audio {
+  width: min(360px, 72vw);
+  max-width: 100%;
+}
+
+.attachment small {
+  color: #6d7d76;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+#upload-status {
+  padding: 6px 12px;
+  color: #176b56;
+  font-size: 12px;
+}
+
+.message:has(.attachment) .bubble {
+  white-space: normal;
+}
+
+@keyframes record-pulse {
+  50% { box-shadow: 0 0 0 7px #d94b4b2e; }
+}
+
+@media (max-width: 760px) {
+  .install-button {
+    width: auto;
+    margin: 0 10px 0 auto;
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+
+  .permission-card {
+    top: max(10px, env(safe-area-inset-top));
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .permission-actions {
+    width: 100%;
+  }
+
+  .permission-actions button {
+    flex: 1;
+  }
+
+  body.chat-open #message-form {
+    padding: 7px 6px max(7px, env(safe-area-inset-bottom));
+  }
+
+  body.chat-open .composer-row {
+    align-items: center;
+    gap: 4px;
+  }
+
+  body.chat-open .media-button {
+    flex: 0 0 36px;
+    width: 36px;
+    height: 38px;
+    color: #075e54;
+    background: transparent;
+    font-size: 16px;
+  }
+
+  body.chat-open .media-button.recording {
+    color: #fff;
+    background: #d94b4b;
+  }
+
+  body.chat-open #message {
+    min-width: 72px;
+    padding: 10px 11px;
+  }
+
+  .attachment img {
+    max-height: 46vh;
+  }
+}
