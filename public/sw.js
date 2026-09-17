@@ -1,5 +1,5 @@
-const CACHE='live-chat-shell-v6';
-const SHELL=['/','/style.css?v=chat-actions-profile-1','/mobile-fix.css?v=chat-actions-profile-1','/features.css?v=chat-actions-profile-1','/whatsapp.css?v=live-chat-2','/app.js?v=live-chat-2','/platform-fixes.js?v=mobile-alerts-2','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png'];
+const CACHE='live-chat-shell-v7';
+const SHELL=['/','/style.css?v=chat-actions-profile-1','/mobile-fix.css?v=chat-actions-profile-1','/features.css?v=chat-actions-profile-1','/whatsapp.css?v=premium-ui-3','/app.js?v=premium-ui-3','/platform-fixes.js?v=mobile-alerts-2','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png'];
 
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));

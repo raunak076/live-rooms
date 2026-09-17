@@ -14,9 +14,9 @@
   <link rel="stylesheet" href="/style.css?v=chat-actions-profile-1">
   <link rel="stylesheet" href="/mobile-fix.css?v=chat-actions-profile-1">
   <link rel="stylesheet" href="/features.css?v=chat-actions-profile-1">
-  <link rel="stylesheet" href="/whatsapp.css?v=live-chat-2">
+  <link rel="stylesheet" href="/whatsapp.css?v=premium-ui-3">
   <script defer src="/socket.io/socket.io.js"></script>
-  <script defer src="/app.js?v=live-chat-2"></script>
+  <script defer src="/app.js?v=premium-ui-3"></script>
   <script defer src="/platform-fixes.js?v=mobile-alerts-2"></script>
 </head>
 <body>
@@ -82,19 +82,21 @@
           <div id="remote-audio" hidden></div>
         </div>
         <div id="messages" role="log" aria-label="Room messages" aria-live="polite"></div>
+        <button id="scroll-latest" class="scroll-latest" type="button" aria-label="Jump to latest message" hidden><span>↓</span><i aria-hidden="true"></i></button>
         <div id="typing" role="status" hidden></div><div id="thinking" role="status" hidden>✦ Gemini is thinking…</div>
         <div id="upload-status" role="status" hidden></div>
         <form id="message-form">
           <div id="reply-preview" class="reply-preview" hidden><div><strong id="reply-name"></strong><span id="reply-text"></span></div><button id="cancel-reply" type="button" class="plain" aria-label="Cancel reply">×</button></div>
           <label class="sr-only" for="image-picker">Choose an image</label><input id="image-picker" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
           <label class="sr-only" for="audio-picker">Choose an audio file</label><input id="audio-picker" type="file" accept="audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav" hidden>
-          <div class="composer-row"><button id="attachment-button" class="media-button" type="button" aria-label="Add attachment">＋</button><button id="attach-image" type="button" hidden>Image</button><button id="attach-audio" type="button" hidden>Audio</button><button id="record-audio" type="button" hidden aria-pressed="false">Record</button><label class="sr-only" for="message">Message</label><textarea id="message" rows="1" maxlength="4000" placeholder="Message"></textarea><button id="mention" class="gemini-button" type="button" aria-label="Ask Gemini">✦</button><button id="send" type="submit" aria-label="Send message">➤</button></div>
+          <div class="composer-row"><button id="attachment-button" class="media-button" type="button" aria-label="Add attachment"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><button id="attach-image" type="button" hidden>Image</button><button id="attach-audio" type="button" hidden>Audio</button><button id="record-audio" type="button" hidden aria-pressed="false">Record</button><label class="sr-only" for="message">Message</label><textarea id="message" rows="1" maxlength="4000" placeholder="Message"></textarea><button id="mention" class="gemini-button" type="button" aria-label="Ask Gemini">✦</button><button id="send" type="submit" aria-label="Send message"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 17 8-17 8 3-8-3-8Z"/><path d="M7 12h14"/></svg></button></div>
           <span id="composer-hint" hidden></span>
         </form>
       </section>
       <nav id="bottom-nav" class="bottom-nav" aria-label="Main sections" hidden><button id="tab-chats" type="button" class="active">💬<span>Chats</span></button><button id="tab-calls" type="button">☎<span>Calls</span></button><button id="tab-profile" type="button">👤<span>Profile</span></button></nav>
       <div id="message-actions" class="modal-backdrop" hidden><section class="action-sheet" role="dialog" aria-modal="true" aria-labelledby="message-actions-title"><div class="sheet-handle"></div><h3 id="message-actions-title">Message actions</h3><button id="action-reply" type="button">↩ Reply</button><button id="action-edit" type="button">✎ Edit</button><button id="action-delete" type="button" class="danger-text">🗑 Delete</button><button id="action-cancel" type="button" class="secondary">Cancel</button></section></div>
       <div id="delete-actions" class="modal-backdrop" hidden><section class="action-sheet" role="dialog" aria-modal="true" aria-labelledby="delete-actions-title"><h3 id="delete-actions-title">Delete message?</h3><button id="delete-me" type="button">Delete for me</button><button id="delete-everyone" type="button" class="danger-text">Delete for everyone</button><button id="delete-cancel" type="button" class="secondary">Cancel</button></section></div>
+      <div id="theme-picker" class="modal-backdrop theme-backdrop" hidden><section class="theme-sheet" role="dialog" aria-modal="true" aria-labelledby="theme-title"><div class="sheet-handle"></div><div class="theme-heading"><div><h3 id="theme-title">Personalise Live Chat</h3><p>Pick an appearance and accent palette.</p></div><button id="close-theme" class="icon-button" type="button" aria-label="Close theme picker">×</button></div><div class="appearance-toggle" role="group" aria-label="Appearance"><button type="button" data-theme-choice="dark">Dark</button><button type="button" data-theme-choice="light">Light</button></div><div class="palette-grid" role="group" aria-label="Colour palette"><button type="button" data-palette="emerald"><span class="palette-preview emerald"></span><strong>Emerald</strong><small>Calm & classic</small></button><button type="button" data-palette="ocean"><span class="palette-preview ocean"></span><strong>Ocean</strong><small>Cool & focused</small></button><button type="button" data-palette="violet"><span class="palette-preview violet"></span><strong>Violet</strong><small>Bold & creative</small></button><button type="button" data-palette="sunset"><span class="palette-preview sunset"></span><strong>Sunset</strong><small>Warm & lively</small></button></div></section></div>
       <div id="image-viewer" class="image-viewer" hidden><button id="close-image" type="button" aria-label="Close image">×</button><img id="full-image" alt="Opened chat image"></div>
       <div id="home-menu" class="popup-menu" hidden><button id="toolbar-create" type="button">Create group</button><button id="toolbar-join" type="button">Join group</button><button id="profile-shortcut" type="button">Profile</button><button id="menu-notifications" type="button">Enable notifications</button><a id="download-android" href="/LiveRooms.apk" download="LiveRooms.apk">Download Android app</a><button id="toolbar-logout" type="button">Logout</button></div>
       <div id="chat-menu" class="popup-menu" hidden><button id="clear-chat" type="button">Clear chat</button><button id="block-contact" type="button" hidden>Block</button><button id="invite" type="button">Copy invite</button><button id="chat-theme" type="button">Change theme</button></div>

@@ -8,6 +8,8 @@ test('Android download, background push and call alert regression guards',()=>{
   const index=read('public/index.html');
   const fixes=read('public/platform-fixes.js');
   const sw=read('public/sw.js');
+  const app=read('public/app.js');
+  const activity=read('android/app/src/main/java/com/raunak/liverooms/MainActivity.java');
   const manifest=JSON.parse(read('public/manifest.webmanifest'));
 
   assert.match(index,/platform-fixes\.js\?v=mobile-alerts-2/);
@@ -28,7 +30,14 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(sw,/silent:false/);
   assert.match(sw,/vibrate:isCall/);
   assert.match(sw,/platform-fixes\.js\?v=mobile-alerts-2/);
-  assert.match(sw,/whatsapp\.css\?v=live-chat-2/);
+  assert.match(sw,/whatsapp\.css\?v=premium-ui-3/);
+  assert.match(index,/id="theme-picker"/);
+  assert.match(index,/id="scroll-latest"/);
+  assert.match(app,/window\.handleNativeBack/);
+  assert.match(app,/data-palette/);
+  assert.match(activity,/evaluateJavascript/);
+  assert.match(activity,/handleNativeBack/);
+  assert.doesNotMatch(activity,/super\.onBackPressed/);
 
   assert.equal(manifest.id,'/');
   assert.equal(manifest.start_url,'/');
