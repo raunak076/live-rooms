@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer } from 'node:http';
-import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual, createHash } from 'node:crypto';
+import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual, createHash, createHmac } from 'node:crypto';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
@@ -65,6 +65,12 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');next();
   });
   app.get('/api/health',(_,res)=>res.json({ok:true,aiConfigured:Boolean(process.env.GEMINI_API_KEY)}));
+  app.get('/api/webrtc-config',(_,res)=>{
+    const expires=Math.floor(Date.now()/1000)+86400,username=expires+':livechat';
+    const credential=createHmac('sha1',process.env.TURN_SECRET||'openrelayprojectsecret').update(username).digest('base64');
+    const host=process.env.TURN_HOST||'staticauth.openrelay.metered.ca';
+    res.json({iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']},{urls:[`turn:${host}:80?transport=udp`,`turn:${host}:80?transport=tcp`,`turn:${host}:443?transport=tcp`,`turns:${host}:443?transport=tcp`],username,credential}]});
+  });
   app.get('/api/push/public-key',(_,res)=>res.json({publicKey:vapidKeys.publicKey}));
   app.post('/api/push/subscribe',express.json({limit:'32kb'}),(req,res)=>{
     const username=sessionUser(req),subscription=req.body;
@@ -86,6 +92,7 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
     const extension=mime==='image/png'?'.png':mime==='image/webp'?'.webp':'.jpg',fileName=username+'-'+randomUUID()+extension;
     await writeFile(join(avatarRoot,fileName),req.body,{flag:'wx'});const updated=Date.now();
     run('UPDATE users SET avatar_file=?,avatar_mime=?,avatar_updated=? WHERE username=?',fileName,mime,updated,username);
+    for(const membership of sql('SELECT room_id FROM memberships WHERE username=?',username))for(const member of sql('SELECT username FROM memberships WHERE room_id=?',membership.room_id))refresh(member.username);
     io.to('user:'+username).emit('profile:updated',{username,avatarUpdated:updated});res.json({ok:true,avatarUpdated:updated});
   });
   app.get('/api/profile/avatar/:username',(req,res)=>{
@@ -105,7 +112,7 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
     run('INSERT INTO media(id,room_id,uploader,file_name,mime,original_name,size) VALUES (?,?,?,?,?,?,?)',id,roomId,username,fileName,mime,originalName,req.body.length);
     const attachment={id,type:mime.startsWith('image/')?'image':'audio',mime,name:originalName,size:req.body.length};
     const message=append(roomId,{name:username,senderId:username,text:'',kind:'user',attachment});
-    run('UPDATE media SET message_id=? WHERE id=?',message.id,id);void notifyRoom(roomId,username,{type:'message',title:'@'+username,body:attachment.type==='image'?'Sent a photo':'Sent an audio message',url:'/?room='+roomId,roomId,tag:'message-'+message.id});
+    run('UPDATE media SET message_id=? WHERE id=?',message.id,id);void notifyRoom(roomId,username,{type:'message',title:username,body:attachment.type==='image'?'Sent a photo':'Sent an audio message',url:'/?room='+roomId,roomId,tag:'message-'+message.id});
     res.status(201).json({ok:true,message});
   });
   app.get('/api/media/:id',(req,res)=>{
@@ -116,7 +123,9 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
     if(!stored||JSON.parse(stored.body).deleted)return res.status(404).end();
     res.setHeader('Cache-Control','private,max-age=86400');res.type(row.mime);res.sendFile(join(mediaRoot,row.file_name));
   });
-  app.use(express.static(fileURLToPath(new URL('./public',import.meta.url)),{
+  const publicRoot=fileURLToPath(new URL('./public',import.meta.url));
+  app.get('/LiveRooms.apk',(_req,res)=>res.download(join(publicRoot,'LiveRooms.apk'),'LiveRooms.apk'));
+  app.use(express.static(publicRoot,{
     etag:false,maxAge:0,setHeaders:res=>res.setHeader('Cache-Control','no-store')
   }));
   app.use((error,req,res,next)=>{if(error?.type==='entity.too.large')return res.status(413).json({error:'Keep each image or audio file under 8 MB.'});next(error);});
@@ -135,7 +144,7 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
   function profile(username){const row=get('SELECT username,display_name,avatar_updated FROM users WHERE username=?',username);return row?{username:row.username,displayName:row.display_name||row.username,avatarUpdated:row.avatar_updated||0}:null;}
   const members=id=>[...new Set([...io.sockets.sockets.values()].filter(s=>s.data.user&&s.rooms.has(id)).map(s=>s.data.user))];
   const presence=id=>io.to(id).emit('members',{roomId:id,members:members(id)});
-  function list(user){return sql('SELECT r.* FROM rooms r JOIN memberships m ON m.room_id=r.id WHERE m.username=? ORDER BY r.rowid DESC',user).map(r=>{const name=r.direct_key?r.direct_key.split(':').find(u=>u!==user):r.name,state=blockState(r.id,user),person=r.direct_key?profile(name):null;return{id:r.id,name,displayName:person?.displayName||r.name,direct:Boolean(r.direct_key),avatarUpdated:person?.avatarUpdated||0,blockedByMe:state.blockedByMe,blockedMe:state.blockedMe};});}
+  function list(user){return sql('SELECT r.* FROM rooms r JOIN memberships m ON m.room_id=r.id WHERE m.username=? ORDER BY r.rowid DESC',user).map(r=>{const name=r.direct_key?r.direct_key.split(':').find(u=>u!==user):r.name,state=blockState(r.id,user),person=r.direct_key?profile(name):null,last=get('SELECT body,at FROM messages WHERE room_id=? AND id NOT IN (SELECT message_id FROM message_hides WHERE username=?) ORDER BY at DESC,rowid DESC LIMIT 1',r.id,user);let preview='No messages yet';if(last){const message=JSON.parse(last.body);preview=message.deleted?'Message deleted':message.attachment?.type==='image'?'📷 Photo':message.attachment?.type==='audio'?'🎙 Audio':message.text||'Message';}return{id:r.id,name,displayName:person?.displayName||r.name,direct:Boolean(r.direct_key),avatarUpdated:person?.avatarUpdated||0,blockedByMe:state.blockedByMe,blockedMe:state.blockedMe,lastMessage:preview.slice(0,120),lastAt:last?.at||0};});}
   function refresh(user){io.to('user:'+user).emit('chats',list(user));}
   function joinUser(user,id){run('INSERT OR IGNORE INTO memberships VALUES (?,?)',id,user);for(const s of io.sockets.sockets.values())if(s.data.user===user)s.join(id);refresh(user);presence(id);}
   function snapshot(id,user){return {...list(user).find(x=>x.id===id),messages:sql('SELECT body FROM messages WHERE room_id=? AND id NOT IN (SELECT message_id FROM message_hides WHERE username=?) ORDER BY at DESC,rowid DESC LIMIT 100',id,user).reverse().map(x=>JSON.parse(x.body)),thinking:busy.has(id),members:members(id)};}
@@ -215,6 +224,7 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
     handler('profile:update',(p,ack)=>{const displayName=typeof p.displayName==='string'?p.displayName.trim():'';if(!displayName||displayName.length>40)return ack({error:'Profile name must contain 1–40 characters.'});run('UPDATE users SET display_name=? WHERE username=?',displayName,socket.data.user);for(const chat of list(socket.data.user))for(const member of sql('SELECT username FROM memberships WHERE room_id=?',chat.id))refresh(member.username);ack({ok:true,profile:profile(socket.data.user)});});
     handler('block',(p,ack)=>{if(typeof p.roomId!=='string'||!hasRoom(p.roomId,socket.data.user))return ack({error:'Chat not found.'});const peer=directPeer(p.roomId,socket.data.user);if(!peer)return ack({error:'Blocking is available in private chats.'});if(p.blocked===false)run('DELETE FROM blocks WHERE blocker=? AND blocked=?',socket.data.user,peer);else run('INSERT OR REPLACE INTO blocks VALUES (?,?,?)',socket.data.user,peer,Date.now());refresh(socket.data.user);refresh(peer);io.to(p.roomId).emit('block:updated',{roomId:p.roomId});ack({ok:true,room:snapshot(p.roomId,socket.data.user)});});
     handler('call:logs',(_p,ack)=>ack({logs:sql(`SELECT c.*,r.name,r.direct_key FROM call_logs c JOIN rooms r ON r.id=c.room_id JOIN memberships m ON m.room_id=c.room_id WHERE m.username=? ORDER BY c.started_at DESC LIMIT 100`,socket.data.user).map(row=>({id:row.id,roomId:row.room_id,callId:row.call_id,name:row.direct_key?row.direct_key.split(':').find(name=>name!==socket.data.user):row.name,direct:Boolean(row.direct_key),startedBy:row.started_by,startedAt:row.started_at,endedAt:row.ended_at}))}));
+    handler('clear:chat',(p,ack)=>{if(typeof p.roomId!=='string'||!hasRoom(p.roomId,socket.data.user))return ack({error:'Chat not found.'});run('INSERT OR IGNORE INTO message_hides(message_id,username) SELECT id,? FROM messages WHERE room_id=?',socket.data.user,p.roomId);refresh(socket.data.user);ack({ok:true});});
     handler('send',async(p,ack)=>{
       if(typeof p.roomId!=='string'||!hasRoom(p.roomId,socket.data.user))return ack({error:'Join this chat first.'});
       if(isBlocked(p.roomId,socket.data.user))return ack({error:'Messaging is unavailable while this contact is blocked.'});
@@ -226,7 +236,7 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
       if(mention){if(Date.now()-aiWindow>60000){aiWindow=Date.now();aiRequests=0;}if(busy.has(p.roomId)||Date.now()-(lastAI.get(p.roomId)||0)<5000||aiActive>=4||aiRequests>=20)return ack({error:'Gemini is busy. Try again shortly.'});}
       let reply=null;if(typeof p.replyTo==='string'){const source=get('SELECT body FROM messages WHERE id=? AND room_id=?',p.replyTo,p.roomId);if(source){const original=JSON.parse(source.body);if(!original.deleted)reply={id:original.id,name:original.name,text:(original.text||original.attachment?.name||'Attachment').slice(0,180)};}}
       const m=append(p.roomId,{id:socket.data.user+':'+p.clientId,name:socket.data.user,senderId:socket.data.user,text:p.text.trim(),kind:'user',reply});ack({ok:true,message:m});
-      void notifyRoom(p.roomId,socket.data.user,{type:'message',title:'@'+socket.data.user,body:m.text.slice(0,180),url:'/?room='+p.roomId,roomId:p.roomId,tag:'message-'+m.id});
+      void notifyRoom(p.roomId,socket.data.user,{type:'message',title:socket.data.user,body:m.text.slice(0,180),url:'/?room='+p.roomId,roomId:p.roomId,tag:'message-'+m.id});
       if(!mention)return;
       busy.add(p.roomId);lastAI.set(p.roomId,Date.now());aiActive++;aiRequests++;
       io.to(p.roomId).emit('thinking',{roomId:p.roomId,busy:true});
@@ -256,7 +266,7 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
       const existing=[...call.participants.entries()].map(([socketId,username])=>({socketId,username}));
       call.participants.set(socket.id,socket.data.user);socket.join('call:'+call.id);(socket.data.calls??=new Set()).add(p.roomId);
       socket.to(p.roomId).emit(created?'call:ring':'call:participant-joined',{roomId:p.roomId,callId:call.id,by:socket.data.user,socketId:socket.id,participants:call.participants.size});
-      if(created)void notifyRoom(p.roomId,socket.data.user,{type:'call',title:'Incoming call from @'+socket.data.user,body:'Tap to open Live Rooms and join',url:'/?room='+p.roomId+'&call='+encodeURIComponent(call.id),roomId:p.roomId,callId:call.id,tag:'call-'+call.id});
+      if(created)void notifyRoom(p.roomId,socket.data.user,{type:'call',title:'Incoming call from '+socket.data.user,body:'Tap to open Live Chat and join',url:'/?room='+p.roomId+'&call='+encodeURIComponent(call.id),roomId:p.roomId,callId:call.id,tag:'call-'+call.id});
       ack({ok:true,callId:call.id,created,participants:existing});
     });
     handler('call:signal',(p,ack)=>{
@@ -272,4 +282,4 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
   });
   server.on('close',()=>{clearInterval(cleanup);db.close();});return {app,server,io};
 }
-if(process.argv[1]===fileURLToPath(import.meta.url)){const{server}=createChat();server.listen(Number(process.env.PORT)||3000,'0.0.0.0',()=>console.log(`Live Rooms: http://localhost:${process.env.PORT||3000}`));}
+if(process.argv[1]===fileURLToPath(import.meta.url)){const{server}=createChat();server.listen(Number(process.env.PORT)||3000,'0.0.0.0',()=>console.log(`Live Chat: http://localhost:${process.env.PORT||3000}`));}
