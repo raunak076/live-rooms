@@ -1,10 +1,10 @@
 const $=id=>document.getElementById(id),socket=io({transports:['websocket','polling'],tryAllTransports:true});
 let currentRoom=null,user=null,chats=[],sending=false,token='',typingTimer,lastTyped=0,pendingRetry=null;
-let activeCall=null,incomingCall=null,localStream=null,callTimer=null,callStartedAt=0;
+let activeCall=null,incomingCall=null,localStream=null,callTimer=null,callStartedAt=0,speakerEnabled=true;
 const peers=new Map(),iceServers=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
 const drafts=new Map(),unread=new Map(),inviteCode=new URLSearchParams(location.search).get('room');
 try{
-  const uiVersion='first-voice-flow-2';
+  const uiVersion='whatsapp-chat-1';
   if(localStorage.getItem('lr-ui-version')!==uiVersion){
     localStorage.removeItem('lr-token');
     localStorage.setItem('lr-ui-version',uiVersion);
@@ -24,14 +24,20 @@ function callRpc(event,payload){return new Promise((resolve,reject)=>{
 });}
 function updateCallCount(count){$('call-participants').textContent=count+' participant'+(count===1?'':'s');}
 function closePeer(socketId){const peer=peers.get(socketId);if(!peer)return;peer.close();peers.delete(socketId);document.getElementById('audio-'+socketId)?.remove();updateCallCount(peers.size+1);}
-function resetCallUi(){clearInterval(callTimer);callTimer=null;callStartedAt=0;for(const id of [...peers.keys()])closePeer(id);localStream?.getTracks().forEach(track=>track.stop());localStream=null;activeCall=null;incomingCall=null;$('call-banner').hidden=true;$('active-call').hidden=true;$('chat').classList.remove('voice-connected');$('voice-call').textContent='☎ Voice';$('mute-call').textContent='Mute';$('mute-call').classList.remove('muted');}
+function showCallScreen(){
+  const title=currentRoom?.name||'Voice call';
+  $('call-peer').textContent=(currentRoom?.direct?'@':'# ')+title;
+  $('call-avatar').textContent=title.trim().charAt(0).toUpperCase()||'#';
+  $('active-call').hidden=false;document.body.classList.add('call-open');
+}
+function resetCallUi(){clearInterval(callTimer);callTimer=null;callStartedAt=0;for(const id of [...peers.keys()])closePeer(id);localStream?.getTracks().forEach(track=>track.stop());localStream=null;activeCall=null;incomingCall=null;speakerEnabled=true;$('call-banner').hidden=true;$('active-call').hidden=true;document.body.classList.remove('call-open');$('chat').classList.remove('voice-connected');$('voice-call').textContent='☎ Voice';$('mute-label').textContent='Mute';$('mute-call').classList.remove('muted');$('mute-call').setAttribute('aria-pressed','false');$('speaker-label').textContent='Speaker';$('speaker-call').classList.remove('speaker-off');$('speaker-call').setAttribute('aria-pressed','true');}
 async function sendSignal(target,signal){if(!activeCall)return;await callRpc('call:signal',{roomId:activeCall.roomId,callId:activeCall.callId,target,signal});}
 function createPeer(socketId,initiator=false){
   if(peers.has(socketId))return peers.get(socketId);
   const peer=new RTCPeerConnection({iceServers});peer.pendingCandidates=[];peers.set(socketId,peer);localStream?.getTracks().forEach(track=>peer.addTrack(track,localStream));
   peer.onicecandidate=e=>{if(e.candidate)sendSignal(socketId,{candidate:e.candidate}).catch(()=>{});};
-  peer.ontrack=e=>{let audio=document.getElementById('audio-'+socketId);if(!audio){audio=document.createElement('audio');audio.id='audio-'+socketId;audio.autoplay=true;audio.playsInline=true;$('remote-audio').append(audio);}audio.srcObject=e.streams[0];audio.play().catch(()=>{});};
-  peer.onconnectionstatechange=()=>{if(['failed','closed'].includes(peer.connectionState))closePeer(socketId);};
+  peer.ontrack=e=>{let audio=document.getElementById('audio-'+socketId);if(!audio){audio=document.createElement('audio');audio.id='audio-'+socketId;audio.autoplay=true;audio.playsInline=true;$('remote-audio').append(audio);}audio.muted=!speakerEnabled;audio.srcObject=e.streams[0];audio.play().catch(()=>{});};
+  peer.onconnectionstatechange=()=>{if(peer.connectionState==='connected')$('call-status').textContent='Connected';if(['failed','closed'].includes(peer.connectionState))closePeer(socketId);};
   if(initiator)peer.createOffer().then(offer=>peer.setLocalDescription(offer)).then(()=>sendSignal(socketId,{description:peer.localDescription})).catch(e=>notice(e.message));
   updateCallCount(peers.size+1);return peer;
 }
@@ -40,7 +46,7 @@ async function joinVoiceCall(){
   if(!navigator.mediaDevices?.getUserMedia)throw new Error('Voice calls need HTTPS or localhost and a supported browser.');
   localStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
   try{
-    const result=await callRpc('call:join',{roomId:currentRoom.id});activeCall={roomId:currentRoom.id,callId:result.callId};incomingCall=null;$('call-banner').hidden=true;$('active-call').hidden=false;$('chat').classList.add('voice-connected');$('voice-call').textContent='☎ In call';callStartedAt=Date.now();
+    const result=await callRpc('call:join',{roomId:currentRoom.id});activeCall={roomId:currentRoom.id,callId:result.callId};incomingCall=null;$('call-banner').hidden=true;$('call-status').textContent=result.created?'Calling…':'Connected';showCallScreen();$('chat').classList.add('voice-connected');$('voice-call').textContent='☎ In call';callStartedAt=Date.now();
     const tick=()=>{const seconds=Math.floor((Date.now()-callStartedAt)/1000);$('call-time').textContent=String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');};tick();callTimer=setInterval(tick,1000);updateCallCount(result.participants.length+1);
     for(const participant of result.participants)createPeer(participant.socketId,true);
   }catch(error){localStream.getTracks().forEach(track=>track.stop());localStream=null;throw error;}
@@ -52,8 +58,8 @@ function drawChats(){
     if(unread.get(chat.id)){const badge=document.createElement('span');badge.className='unread';badge.textContent=unread.get(chat.id);button.append(badge);}
     button.onclick=()=>enter({roomId:chat.id}).catch(e=>notice(e.message));$('chat-list').append(button);}
 }
-function showLobby(){if(currentRoom)drafts.set(currentRoom.id,$('message').value);if(activeCall)leaveVoiceCall();currentRoom=null;$('auth-panel').hidden=true;$('chat').hidden=true;$('lobby').hidden=false;history.replaceState(null,'','/');drawChats();}
-function signedIn(result){user=result.user;token=result.token||token;chats=result.chats;try{localStorage.setItem('lr-token',token);}catch{}$('password').value='';$('identity').textContent='@'+user;$('sidebar-chats').hidden=false;$('intro').hidden=true;$('auth-panel').hidden=true;$('lobby').hidden=false;drawChats();}
+function showLobby(){if(currentRoom)drafts.set(currentRoom.id,$('message').value);if(activeCall)leaveVoiceCall();currentRoom=null;document.body.classList.remove('chat-open');$('auth-panel').hidden=true;$('chat').hidden=true;$('lobby').hidden=false;history.replaceState(null,'','/');drawChats();}
+function signedIn(result){user=result.user;token=result.token||token;chats=result.chats;document.body.classList.remove('chat-open');try{localStorage.setItem('lr-token',token);}catch{}$('password').value='';$('identity').textContent='@'+user;$('sidebar-chats').hidden=false;$('intro').hidden=true;$('auth-panel').hidden=true;$('lobby').hidden=false;drawChats();}
 function renderMessage(m,{pending=false}={}){
   if(m.roomId!==currentRoom?.id)return;
   $('messages').querySelector('.empty')?.remove();
@@ -70,7 +76,7 @@ function renderMessage(m,{pending=false}={}){
 function showRoom(room){
   if(activeCall&&activeCall.roomId!==room.id)leaveVoiceCall();incomingCall=null;$('call-banner').hidden=true;
   if(currentRoom)drafts.set(currentRoom.id,$('message').value);$('message').value=drafts.get(room.id)||'';
-  currentRoom=room;unread.delete(room.id);$('lobby').hidden=true;$('chat').hidden=false;$('room-title').textContent=(room.direct?'@':'# ')+room.name;$('invite').hidden=room.direct;
+  currentRoom=room;unread.delete(room.id);document.body.classList.add('chat-open');$('lobby').hidden=true;$('chat').hidden=false;$('room-title').textContent=(room.direct?'@':'# ')+room.name;$('invite').hidden=room.direct;
   $('messages').replaceChildren();if(!room.messages.length){const el=document.createElement('div');el.className='empty';const strong=document.createElement('strong');strong.textContent=room.direct?'Say a little hello.':'The room is yours.';el.append(strong,document.createTextNode(room.direct?'Your conversation starts here.':'Share an invite and start the conversation.'));$('messages').append(el);}
   room.messages.forEach(m=>renderMessage(m));$('messages').scrollTop=$('messages').scrollHeight;$('thinking').hidden=!room.thinking;$('typing').hidden=true;
   $('members').textContent=room.members.length+' online · '+room.members.map(u=>'@'+u).join(', ');
@@ -99,7 +105,7 @@ socket.on('members',p=>{if(p.roomId===currentRoom?.id)$('members').textContent=p
 socket.on('thinking',p=>{if(p.roomId===currentRoom?.id)$('thinking').hidden=!p.busy;});
 socket.on('typing',p=>{if(p.roomId!==currentRoom?.id)return;$('typing').textContent='@'+p.user+' is typing…';$('typing').hidden=false;clearTimeout(typingTimer);typingTimer=setTimeout(()=>$('typing').hidden=true,2200);});
 socket.on('call:ring',p=>{if(activeCall||p.roomId!==currentRoom?.id)return;incomingCall=p;$('call-title').textContent='Incoming voice call';$('call-subtitle').textContent='@'+p.by+' started a call';$('call-banner').hidden=false;});
-socket.on('call:participant-joined',p=>{if(activeCall?.callId===p.callId)updateCallCount(Math.max(p.participants,peers.size+1));else if(!activeCall&&p.roomId===currentRoom?.id){incomingCall=p;$('call-title').textContent='Voice call in progress';$('call-subtitle').textContent='Join '+p.participants+' participant'+(p.participants===1?'':'s');$('call-banner').hidden=false;}});
+socket.on('call:participant-joined',p=>{if(activeCall?.callId===p.callId){$('call-status').textContent='Connected';updateCallCount(Math.max(p.participants,peers.size+1));}else if(!activeCall&&p.roomId===currentRoom?.id){incomingCall=p;$('call-title').textContent='Voice call in progress';$('call-subtitle').textContent='Join '+p.participants+' participant'+(p.participants===1?'':'s');$('call-banner').hidden=false;}});
 socket.on('call:participant-left',p=>{if(activeCall?.callId!==p.callId)return;closePeer(p.socketId);updateCallCount(Math.max(p.participants,peers.size+1));});
 socket.on('call:ended',p=>{if(activeCall?.callId===p.callId){resetCallUi();notice('Voice call ended.');}else if(incomingCall?.callId===p.callId){incomingCall=null;$('call-banner').hidden=true;}});
 socket.on('call:signal',async p=>{
@@ -123,7 +129,8 @@ $('mention').onclick=()=>{$('message').value+=($('message').value?' ':'')+'@gemi
 $('voice-call').onclick=()=>{if(activeCall)return;joinVoiceCall().catch(e=>notice(e.name==='NotAllowedError'?'Microphone permission is required for voice calls.':e.message));};
 $('join-call').onclick=()=>joinVoiceCall().catch(e=>notice(e.name==='NotAllowedError'?'Microphone permission is required for voice calls.':e.message));
 $('decline-call').onclick=()=>{incomingCall=null;$('call-banner').hidden=true;};
-$('mute-call').onclick=()=>{if(!localStream)return;const enabled=!localStream.getAudioTracks()[0]?.enabled;localStream.getAudioTracks().forEach(track=>track.enabled=enabled);$('mute-call').textContent=enabled?'Mute':'Unmute';$('mute-call').classList.toggle('muted',!enabled);};
+$('speaker-call').onclick=()=>{speakerEnabled=!speakerEnabled;for(const audio of $('remote-audio').querySelectorAll('audio'))audio.muted=!speakerEnabled;$('speaker-label').textContent=speakerEnabled?'Speaker':'Speaker off';$('speaker-call').classList.toggle('speaker-off',!speakerEnabled);$('speaker-call').setAttribute('aria-pressed',String(speakerEnabled));};
+$('mute-call').onclick=()=>{if(!localStream)return;const enabled=!localStream.getAudioTracks()[0]?.enabled;localStream.getAudioTracks().forEach(track=>track.enabled=enabled);$('mute-label').textContent=enabled?'Mute':'Unmute';$('mute-call').classList.toggle('muted',!enabled);$('mute-call').setAttribute('aria-pressed',String(!enabled));};
 $('end-call').onclick=()=>leaveVoiceCall();
 $('invite').onclick=async()=>{try{await navigator.clipboard.writeText(location.origin+'/?room='+currentRoom.id);$('invite').textContent='Copied!';setTimeout(()=>$('invite').textContent='Copy invite',2000);}catch{notice('Copy this invite: '+location.origin+'/?room='+currentRoom.id);}};
 $('leave').onclick=$('new-chat').onclick=()=>{showLobby();clearNotice();};
