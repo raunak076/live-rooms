@@ -11,11 +11,11 @@
   <link rel="icon" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/style.css?v=chat-media-pwa-1">
-  <link rel="stylesheet" href="/mobile-fix.css?v=chat-media-pwa-1">
-  <link rel="stylesheet" href="/features.css?v=chat-media-pwa-1">
+  <link rel="stylesheet" href="/style.css?v=chat-actions-profile-1">
+  <link rel="stylesheet" href="/mobile-fix.css?v=chat-actions-profile-1">
+  <link rel="stylesheet" href="/features.css?v=chat-actions-profile-1">
   <script defer src="/socket.io/socket.io.js"></script>
-  <script defer src="/app.js?v=chat-media-pwa-1"></script>
+  <script defer src="/app.js?v=chat-actions-profile-1"></script>
   <script defer src="/platform-fixes.js?v=mobile-alerts-2"></script>
 </head>
 <body>
@@ -54,18 +54,22 @@
         <p class="privacy">Pick a unique username so friends can find you. Passwords are stored as salted hashes.</p>
       </section>
       <section id="lobby" hidden>
-        <div class="eyebrow">LET’S TALK</div><h2>Make room for your people.</h2><p class="muted">A room for the group. A private chat for a friend.</p>
-        <form id="contact-form" class="contact-form"><label for="contact">Find a contact by username</label><div><input id="contact" maxlength="25" placeholder="@username" required><button type="submit">Open chat →</button></div></form>
-        <div class="choices">
-          <form id="create-form"><span class="tile-icon">＋</span><h3>Start something</h3><p>Open a fresh room and share the invite.</p><label for="room-name">Room name</label><input id="room-name" maxlength="48" placeholder="e.g. The dev corner" required><button type="submit">Create room <span>↗</span></button></form>
-          <form id="join-form"><span class="tile-icon">↗</span><h3>Join your people</h3><p>Have an invite? You’re in the right place.</p><label for="room-code">Invite code or link</label><input id="room-code" placeholder="Paste your invite here" required><button type="submit" class="secondary">Join room <span>→</span></button></form>
+        <div class="lobby-heading"><div><div class="eyebrow">CHATS</div><h2>Your conversations</h2></div><button id="profile-shortcut" class="avatar-button" type="button" aria-label="Edit profile"><span id="header-avatar">👤</span></button></div>
+        <nav class="lobby-toolbar" aria-label="Chat actions"><button id="toolbar-create" type="button">＋ Create group</button><button id="toolbar-join" type="button" class="secondary">↗ Join group</button><button id="toolbar-search" type="button" class="secondary">⌕ Search</button><button id="toolbar-logout" type="button" class="plain">Logout</button></nav>
+        <section class="conversation-list-card"><div class="eyebrow">CONTACTS & GROUPS</div><div id="lobby-chat-list" class="lobby-chat-list"></div></section>
+        <div id="lobby-panels" class="lobby-panels">
+          <form id="contact-form" class="contact-form" data-panel="search" hidden><label for="contact">Find a contact by username</label><div><input id="contact" maxlength="25" placeholder="@username" required><button type="submit">Open chat →</button></div></form>
+          <form id="create-form" class="quick-panel" data-panel="create" hidden><span class="tile-icon">＋</span><div><h3>Create group</h3><p>Open a fresh room and share the invite.</p></div><label for="room-name">Group name</label><input id="room-name" maxlength="48" placeholder="e.g. The dev corner" required><button type="submit">Create group <span>↗</span></button></form>
+          <form id="join-form" class="quick-panel" data-panel="join" hidden><span class="tile-icon">↗</span><div><h3>Join group</h3><p>Paste the invite link or code.</p></div><label for="room-code">Invite code or link</label><input id="room-code" placeholder="Paste your invite here" required><button type="submit" class="secondary">Join group <span>→</span></button></form>
         </div>
         <p class="privacy">Anyone with a room invite can join. Private chats are restricted to the two accounts. The latest 100 messages per chat are retained on this server. Tagging @gemini sends the latest 20 room messages to Google for an AI reply visible to everyone.</p>
       </section>
+      <section id="calls-view" class="tab-view" hidden><div class="eyebrow">CALLS</div><h2>Recent calls</h2><div id="call-log-list" class="call-log-list"></div></section>
+      <section id="profile-view" class="tab-view" hidden><div class="eyebrow">PROFILE</div><h2>Your profile</h2><form id="profile-form" class="profile-card"><button id="profile-photo-button" class="profile-photo" type="button" aria-label="Change profile photo"><img id="profile-avatar" alt="Your profile photo" hidden><span id="profile-avatar-placeholder">👤</span><small>Change photo</small></button><label for="profile-name">Display name</label><input id="profile-name" maxlength="40" required><input id="profile-photo-picker" type="file" accept="image/jpeg,image/png,image/webp" hidden><button type="submit">Save profile</button></form></section>
       <section id="chat" hidden>
         <header>
           <div><div class="eyebrow">LIVE CONVERSATION</div><h2 id="room-title"></h2></div>
-          <div class="actions"><button id="voice-call" class="call-button" type="button" aria-label="Start voice call">☎ Voice</button><button id="invite" class="secondary">Copy invite</button><button id="leave" class="plain">All chats</button></div>
+          <div class="actions"><button id="voice-call" class="call-button" type="button" aria-label="Start voice call">☎ Voice</button><button id="block-contact" class="secondary" type="button" hidden>Block</button><button id="invite" class="secondary">Copy invite</button><button id="leave" class="plain">All chats</button></div>
         </header>
         <div class="member-bar"><span id="members"></span><span class="ai-label">✦ @gemini is a mention away</span></div>
         <div id="call-banner" class="call-banner" role="status" hidden><div><span class="call-pulse"></span><strong id="call-title">Incoming voice call</strong><small id="call-subtitle"></small></div><div class="call-actions"><button id="decline-call" type="button" class="call-danger">Decline</button><button id="join-call" type="button">Join call</button></div></div>
@@ -79,6 +83,7 @@
         <div id="typing" role="status" hidden></div><div id="thinking" role="status" hidden>✦ Gemini is thinking…</div>
         <div id="upload-status" role="status" hidden></div>
         <form id="message-form">
+          <div id="reply-preview" class="reply-preview" hidden><div><strong id="reply-name"></strong><span id="reply-text"></span></div><button id="cancel-reply" type="button" class="plain" aria-label="Cancel reply">×</button></div>
           <label class="sr-only" for="image-picker">Choose an image</label><input id="image-picker" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
           <label class="sr-only" for="audio-picker">Choose an audio file</label><input id="audio-picker" type="file" accept="audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav" hidden>
           <div class="composer-row"><button id="attach-image" class="media-button" type="button" aria-label="Send image">📷</button><button id="attach-audio" class="media-button" type="button" aria-label="Send audio file">♫</button><button id="record-audio" class="media-button" type="button" aria-label="Record voice note" aria-pressed="false">🎙</button><label class="sr-only" for="message">Message</label><textarea id="message" rows="2" maxlength="4000" placeholder="Say something… or ask @gemini"></textarea><button id="send" type="submit" aria-label="Send message">Send ↑</button></div>
@@ -86,6 +91,10 @@
         </form>
         <p class="chat-note">Calls and voice notes use your microphone. AI may make mistakes. Mentioning @gemini shares recent room context with Google.</p>
       </section>
+      <nav id="bottom-nav" class="bottom-nav" aria-label="Main sections" hidden><button id="tab-chats" type="button" class="active">💬<span>Chats</span></button><button id="tab-calls" type="button">☎<span>Calls</span></button><button id="tab-profile" type="button">👤<span>Profile</span></button></nav>
+      <div id="message-actions" class="modal-backdrop" hidden><section class="action-sheet" role="dialog" aria-modal="true" aria-labelledby="message-actions-title"><div class="sheet-handle"></div><h3 id="message-actions-title">Message actions</h3><button id="action-reply" type="button">↩ Reply</button><button id="action-edit" type="button">✎ Edit</button><button id="action-delete" type="button" class="danger-text">🗑 Delete</button><button id="action-cancel" type="button" class="secondary">Cancel</button></section></div>
+      <div id="delete-actions" class="modal-backdrop" hidden><section class="action-sheet" role="dialog" aria-modal="true" aria-labelledby="delete-actions-title"><h3 id="delete-actions-title">Delete message?</h3><button id="delete-me" type="button">Delete for me</button><button id="delete-everyone" type="button" class="danger-text">Delete for everyone</button><button id="delete-cancel" type="button" class="secondary">Cancel</button></section></div>
+      <div id="image-viewer" class="image-viewer" hidden><button id="close-image" type="button" aria-label="Close image">×</button><img id="full-image" alt="Opened chat image"></div>
       <p id="notice" role="alert" hidden></p>
     </main>
   </div>

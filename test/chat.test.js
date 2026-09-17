@@ -42,13 +42,19 @@ test('real-time delivery, DM isolation, ownership, deduplication, AI routing and
     const dm=(await rpc(alice,'direct',{username:'bob'})).room;assert.equal(dm.direct,true);
     assert.match((await rpc(eve,'enter',{roomId:dm.id})).error,/not found/);
     assert.match((await rpc(eve,'send',{roomId:dm.id,text:'intrusion',clientId:'bad'})).error,/Join/);
-    const dmArrival=once(bob,'message');await rpc(alice,'send',{roomId:dm.id,text:'private hello',clientId:'dm-1'});assert.equal((await dmArrival)[0].text,'private hello');
+    const dmArrival=once(bob,'message');const dmSent=await rpc(alice,'send',{roomId:dm.id,text:'private hello',clientId:'dm-1'});assert.equal((await dmArrival)[0].text,'private hello');
+    const editedEvent=once(bob,'message:updated');const edited=await rpc(alice,'message:edit',{id:dmSent.message.id,text:'private hello edited'});assert.equal(edited.message.edited,true);assert.equal((await editedEvent)[0].text,'private hello edited');
+    const reply=await rpc(bob,'send',{roomId:dm.id,text:'@alice got it',clientId:'reply-1',replyTo:dmSent.message.id});assert.equal(reply.message.reply.name,'alice');
+    assert.equal((await rpc(bob,'delete',{id:dmSent.message.id,scope:'me'})).ok,true);assert.equal((await rpc(bob,'enter',{roomId:dm.id})).room.messages.some(message=>message.id===dmSent.message.id),false);assert.equal((await rpc(alice,'enter',{roomId:dm.id})).room.messages.some(message=>message.id===dmSent.message.id),true);
+    assert.equal((await rpc(alice,'block',{roomId:dm.id,blocked:true})).room.blockedByMe,true);assert.match((await rpc(bob,'send',{roomId:dm.id,text:'blocked',clientId:'blocked-1'})).error,/blocked/);assert.match((await rpc(bob,'call:join',{roomId:dm.id})).error,/blocked/);assert.equal((await rpc(alice,'block',{roomId:dm.id,blocked:false})).room.blockedByMe,false);
+    const profile=await rpc(alice,'profile:update',{displayName:'Alice A'});assert.equal(profile.profile.displayName,'Alice A');
+    const aliceEnded=once(alice,'call:ended'),bobEnded=once(bob,'call:ended');const endCall=await rpc(alice,'call:join',{roomId:room.id});await rpc(bob,'call:join',{roomId:room.id,expectedCallId:endCall.callId});assert.equal((await rpc(alice,'call:end',{roomId:room.id})).ok,true);assert.equal((await aliceEnded)[0].callId,endCall.callId);assert.equal((await bobEnded)[0].callId,endCall.callId);assert.ok((await rpc(alice,'call:logs',{})).logs.some(log=>log.callId===endCall.callId&&log.endedAt));
     const another=await connect(port);sockets.push(another);assert.equal((await rpc(another,'auth',{token:a.token})).user,'alice');
     const history=(await rpc(another,'enter',{roomId:room.id})).room.messages;assert.equal(history.filter(m=>m.id===sent.message.id).length,1);assert.equal(history[0].deleted,true);
     for(const s of sockets)s.disconnect();await new Promise(r=>chat.io.close(r));
     chat=createChat({dbPath});await new Promise(r=>chat.server.listen(0,r));
     const restored=await connect(chat.server.address().port);sockets.push(restored);assert.equal((await rpc(restored,'auth',{token:a.token})).user,'alice');
-    assert.equal((await rpc(restored,'enter',{roomId:dm.id})).room.messages[0].text,'private hello');
+    assert.equal((await rpc(restored,'enter',{roomId:dm.id})).room.messages.some(message=>message.text==='private hello edited'),true);
     const health=await fetch('http://localhost:'+chat.server.address().port+'/api/health');assert.equal(health.status,200);
     const page=await fetch('http://localhost:'+chat.server.address().port);assert.match(await page.text(),/Your people/);
   }finally{for(const s of sockets)s.disconnect();await new Promise(r=>chat.io.close(r));rmSync(folder,{recursive:true,force:true});}
