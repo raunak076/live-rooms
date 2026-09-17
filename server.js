@@ -42,7 +42,9 @@ export function createChat({generate=askGemini,dbPath='data/chat.db'}={}) {
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');next();
   });
   app.get('/api/health',(_,res)=>res.json({ok:true,aiConfigured:Boolean(process.env.GEMINI_API_KEY)}));
-  app.use(express.static(fileURLToPath(new URL('./public',import.meta.url))));
+  app.use(express.static(fileURLToPath(new URL('./public',import.meta.url)),{
+    etag:false,maxAge:0,setHeaders:res=>res.setHeader('Cache-Control','no-store')
+  }));
   const io=new Server(server,{maxHttpBufferSize:16384,allowRequest:(req,callback)=>{
     const origin=req.headers.origin;let valid=!origin;
     try{valid ||= process.env.APP_ORIGIN?origin===process.env.APP_ORIGIN:new URL(origin).host===req.headers.host;}catch{}
