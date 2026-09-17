@@ -1,5 +1,5 @@
-const CACHE='live-rooms-shell-v4';
-const SHELL=['/','/style.css?v=chat-media-pwa-1','/mobile-fix.css?v=chat-media-pwa-1','/features.css?v=chat-media-pwa-1','/app.js?v=chat-media-pwa-1','/platform-fixes.js?v=mobile-alerts-2','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png'];
+const CACHE='live-rooms-shell-v5';
+const SHELL=['/','/style.css?v=chat-actions-profile-1','/mobile-fix.css?v=chat-actions-profile-1','/features.css?v=chat-actions-profile-1','/app.js?v=chat-actions-profile-1','/platform-fixes.js?v=mobile-alerts-2','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png'];
 
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
