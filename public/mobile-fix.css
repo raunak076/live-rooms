@@ -40,3 +40,280 @@
     display: flex !important;
   }
 }
+
+/* Full-screen WhatsApp-style voice call. */
+#active-call.call-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  width: 100%;
+  height: 100dvh;
+  margin: 0;
+  padding: max(28px, env(safe-area-inset-top)) 22px max(34px, env(safe-area-inset-bottom));
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(165deg, #153f37 0%, #0b2924 58%, #071b18 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: none;
+}
+
+#active-call.call-screen[hidden] {
+  display: none !important;
+}
+
+.call-screen-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #c9ddd7;
+  font-size: 14px;
+}
+
+.call-person {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.call-avatar {
+  width: 116px;
+  height: 116px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 24px;
+  border: 3px solid #ffffff2b;
+  border-radius: 50%;
+  background: #2a6657;
+  box-shadow: 0 18px 50px #0005;
+  color: #d9f7e8;
+  font-size: 48px;
+  font-weight: 750;
+}
+
+#active-call #call-peer {
+  margin: 0 0 9px;
+  color: #fff;
+  font-size: clamp(28px, 8vw, 42px);
+}
+
+#active-call #call-time {
+  color: #d5e5df;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+#active-call #call-participants {
+  margin-top: 8px;
+  color: #9ebbb1;
+}
+
+.call-screen-actions {
+  width: min(390px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 18px;
+}
+
+.call-screen-actions button {
+  width: 76px;
+  min-height: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 10px;
+  border-radius: 50%;
+  background: #ffffff1c;
+  color: #fff;
+  font-size: 12px;
+}
+
+.call-screen-actions button[aria-pressed="true"],
+.call-screen-actions button.muted,
+.call-screen-actions button.speaker-off {
+  background: #fff;
+  color: #173a32;
+}
+
+.call-screen-actions #end-call {
+  background: #e64b4b;
+  color: #fff;
+}
+
+.call-control-icon {
+  font-size: 23px;
+  line-height: 1;
+}
+
+/* The chat alone becomes a full phone screen; auth and contacts stay unchanged. */
+@media (max-width: 760px) {
+  body.chat-open {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  body.chat-open .shell {
+    display: block;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  body.chat-open aside {
+    display: none;
+  }
+
+  body.chat-open main {
+    height: 100dvh;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body.chat-open #chat:not([hidden]) {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    min-height: 0;
+    margin: 0;
+    background: #efeae2;
+  }
+
+  body.chat-open #chat > header {
+    flex: 0 0 auto;
+    min-height: 72px;
+    padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+    align-items: center;
+    background: #075e54;
+    color: #fff;
+    box-shadow: 0 2px 8px #0002;
+  }
+
+  body.chat-open #chat > header .eyebrow {
+    display: none;
+  }
+
+  body.chat-open #chat > header h2 {
+    margin: 0;
+    color: #fff;
+    font-size: 19px;
+  }
+
+  body.chat-open #chat > header button {
+    padding: 9px 10px;
+    border: 0;
+    background: transparent;
+    color: #fff;
+  }
+
+  body.chat-open #chat > header #voice-call {
+    background: #ffffff18;
+  }
+
+  body.chat-open .member-bar {
+    flex: 0 0 auto;
+    padding: 8px 14px;
+    border: 0;
+    background: #d9eee8;
+    color: #315c52;
+    font-size: 11px;
+  }
+
+  body.chat-open #messages {
+    padding: 14px 10px 10px;
+    background-color: #efeae2;
+    background-image: radial-gradient(#7c918922 0.8px, transparent 0.8px);
+    background-size: 18px 18px;
+  }
+
+  body.chat-open .message {
+    max-width: 86%;
+    margin-bottom: 10px;
+  }
+
+  body.chat-open .bubble {
+    padding: 9px 12px;
+    border: 0;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px #0002;
+    background: #fff;
+  }
+
+  body.chat-open .own .bubble {
+    background: #d9fdd3;
+    border-radius: 8px;
+  }
+
+  body.chat-open .meta {
+    margin-bottom: 4px;
+    font-size: 12px;
+  }
+
+  body.chat-open .delete-message {
+    font-size: 10px;
+  }
+
+  body.chat-open #typing,
+  body.chat-open #thinking {
+    flex: 0 0 auto;
+    padding: 5px 12px;
+    background: #efeae2;
+  }
+
+  body.chat-open #message-form {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 7px 8px max(7px, env(safe-area-inset-bottom));
+    border: 0;
+    border-radius: 0;
+    background: #f0f2f5;
+  }
+
+  body.chat-open #message {
+    min-height: 44px;
+    max-height: 100px;
+    padding: 11px 13px;
+    border-radius: 22px;
+    background: #fff;
+  }
+
+  body.chat-open .composer-footer {
+    margin-top: 5px;
+  }
+
+  body.chat-open #mention {
+    color: #075e54;
+  }
+
+  body.chat-open #send {
+    width: 48px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #00a884;
+    font-size: 0;
+  }
+
+  body.chat-open #send::after {
+    content: "➤";
+    font-size: 19px;
+  }
+
+  body.chat-open .chat-note {
+    display: none;
+  }
+
+  body.call-open {
+    overflow: hidden;
+  }
+}
