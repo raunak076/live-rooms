@@ -68,9 +68,11 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
   app.get('/api/health',(_,res)=>res.json({ok:true,aiConfigured:Boolean(process.env.GEMINI_API_KEY)}));
   app.get('/api/webrtc-config',(_,res)=>{
     const expires=Math.floor(Date.now()/1000)+86400,username=expires+':livechat';
-    const credential=createHmac('sha1',process.env.TURN_SECRET||'openrelayprojectsecret').update(username).digest('base64');
+    const credential=process.env.TURN_CREDENTIAL||createHmac('sha1',process.env.TURN_SECRET||'openrelayprojectsecret').update(process.env.TURN_USERNAME||username).digest('base64');
     const host=process.env.TURN_HOST||'staticauth.openrelay.metered.ca';
-    res.json({iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']},{urls:[`turn:${host}:80?transport=udp`,`turn:${host}:80?transport=tcp`,`turn:${host}:443?transport=tcp`,`turns:${host}:443?transport=tcp`],username,credential}]});
+    const turnUsername=process.env.TURN_USERNAME||username;
+    const urls=process.env.TURN_URLS?.split(',').map(value=>value.trim()).filter(Boolean)||[`turn:${host}:80?transport=udp`,`turn:${host}:80?transport=tcp`,`turn:${host}:3478?transport=udp`,`turn:${host}:3478?transport=tcp`,`turn:${host}:443?transport=tcp`,`turns:${host}:443?transport=tcp`,`turns:${host}:5349?transport=tcp`];
+    res.setHeader('Cache-Control','no-store');res.json({iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.cloudflare.com:3478']},{urls,username:turnUsername,credential}]});
   });
   app.get('/api/push/public-key',(_,res)=>res.json({publicKey:vapidKeys.publicKey}));
   app.post('/api/push/subscribe',express.json({limit:'32kb'}),(req,res)=>{
@@ -150,6 +152,7 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
   function joinUser(user,id){run('INSERT OR IGNORE INTO memberships VALUES (?,?)',id,user);for(const s of io.sockets.sockets.values())if(s.data.user===user)s.join(id);refresh(user);presence(id);}
   function snapshot(id,user){return {...list(user).find(x=>x.id===id),messages:sql('SELECT body FROM messages WHERE room_id=? AND id NOT IN (SELECT message_id FROM message_hides WHERE username=?) ORDER BY at DESC,rowid DESC LIMIT 100',id,user).reverse().map(x=>JSON.parse(x.body)),thinking:busy.has(id),members:members(id)};}
   function append(id,message){const m={id:randomUUID(),roomId:id,at:Date.now(),...message};run('INSERT INTO messages VALUES (?,?,?,?)',m.id,id,JSON.stringify(m),m.at);run('DELETE FROM messages WHERE room_id=? AND id NOT IN (SELECT id FROM messages WHERE room_id=? ORDER BY at DESC,rowid DESC LIMIT 100)',id,id);if(m.senderId)run('DELETE FROM conversation_hides WHERE room_id=? AND username<>?',id,m.senderId);io.to(id).emit('message',m);for(const member of sql('SELECT username FROM memberships WHERE room_id=?',id))refresh(member.username);return m;}
+  app.get('/api/sync',(req,res)=>{const username=sessionUser(req);if(!username)return res.status(401).json({error:'Sign in again.'});const roomId=typeof req.query.roomId==='string'?req.query.roomId:'';res.setHeader('Cache-Control','no-store');res.json({user:username,chats:list(username),profile:profile(username),room:roomId&&hasRoom(roomId,username)?snapshot(roomId,username):null});});
   async function notifyRoom(roomId,excludeUser,payload){
     const subscriptions=sql('SELECT p.endpoint,p.subscription FROM push_subscriptions p JOIN memberships m ON m.username=p.username WHERE m.room_id=? AND p.username<>?',roomId,excludeUser||'');
     await Promise.allSettled(subscriptions.map(async row=>{try{await deliverPush(JSON.parse(row.subscription),payload,{TTL:payload.type==='call'?60:86400,urgency:payload.type==='call'?'high':'normal',topic:String(payload.tag||'live-rooms').slice(0,32)});}catch(error){if(error?.statusCode===404||error?.statusCode===410)run('DELETE FROM push_subscriptions WHERE endpoint=?',row.endpoint);}}));
