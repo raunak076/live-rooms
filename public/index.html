@@ -14,10 +14,10 @@
   <link rel="stylesheet" href="/style.css?v=chat-actions-profile-1">
   <link rel="stylesheet" href="/mobile-fix.css?v=chat-actions-profile-1">
   <link rel="stylesheet" href="/features.css?v=chat-actions-profile-1">
-  <link rel="stylesheet" href="/whatsapp.css?v=premium-ui-4">
+  <link rel="stylesheet" href="/whatsapp.css?v=android-call-5">
   <script defer src="/socket.io/socket.io.js"></script>
-  <script defer src="/app.js?v=premium-ui-4"></script>
-  <script defer src="/platform-fixes.js?v=mobile-alerts-3"></script>
+  <script defer src="/app.js?v=android-call-5"></script>
+  <script defer src="/platform-fixes.js?v=android-resume-4"></script>
 </head>
 <body>
   <div class="shell">
@@ -71,7 +71,7 @@
         <header class="chat-header">
           <button id="leave" class="icon-button back-button" type="button" aria-label="Back to chats">‹</button><div id="chat-header-avatar" class="chat-avatar">#</div>
           <div class="chat-header-copy"><h2 id="room-title"></h2><span id="members"></span></div>
-          <div class="actions"><button id="voice-call" class="icon-button" type="button" aria-label="Start voice call">☎</button><button id="chat-menu-button" class="icon-button" type="button" aria-label="Chat menu">⋮</button></div>
+          <div class="actions"><button id="voice-call" class="icon-button call-icon-only" type="button" aria-label="Start voice call" title="Voice call"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 3.5 10 7.9 8.3 9.6c1.1 2.3 2.8 4 5.1 5.1l1.7-1.7 4.4 2.8-.7 3.1c-.2.9-1 1.5-1.9 1.5C9.6 20.4 3.6 14.4 3.6 7.1c0-.9.6-1.7 1.5-1.9l2.1-.5Z"/></svg></button><button id="chat-menu-button" class="icon-button" type="button" aria-label="Chat menu">⋮</button></div>
         </header>
         <div class="member-bar" hidden><span class="ai-label">Gemini</span></div>
         <div id="call-banner" class="call-banner" role="status" hidden><div><span class="call-pulse"></span><strong id="call-title">Incoming voice call</strong><small id="call-subtitle"></small></div><div class="call-actions"><button id="decline-call" type="button" class="call-danger">Decline</button><button id="join-call" type="button">Join call</button></div></div>
