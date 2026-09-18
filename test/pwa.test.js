@@ -12,7 +12,7 @@ test('Android download, background push and call alert regression guards',()=>{
   const activity=read('android/app/src/main/java/com/raunak/liverooms/MainActivity.java');
   const manifest=JSON.parse(read('public/manifest.webmanifest'));
 
-  assert.match(index,/platform-fixes\.js\?v=mobile-alerts-3/);
+  assert.match(index,/platform-fixes\.js\?v=android-resume-4/);
   assert.doesNotThrow(()=>new Function(fixes));
   assert.doesNotThrow(()=>new Function(sw));
 
@@ -29,8 +29,8 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(sw,/requireInteraction:isCall/);
   assert.match(sw,/silent:false/);
   assert.match(sw,/vibrate:isCall/);
-  assert.match(sw,/platform-fixes\.js\?v=mobile-alerts-3/);
-  assert.match(sw,/whatsapp\.css\?v=premium-ui-4/);
+  assert.match(sw,/platform-fixes\.js\?v=android-resume-4/);
+  assert.match(sw,/whatsapp\.css\?v=android-call-5/);
   assert.match(index,/id="theme-picker"/);
   assert.match(index,/id="chat-bg-color"/);
   assert.match(index,/id="profile-photo-edit"/);
@@ -39,10 +39,17 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(app,/data-palette/);
   assert.match(app,/delete:chat/);
   assert.match(app,/Notification\.permission!==['"]default['"]/);
+  assert.match(app,/handleNativeResume/);
+  assert.match(app,/\/api\/sync/);
+  assert.match(app,/touchstart/);
+  assert.match(index,/class="icon-button call-icon-only"/);
+  assert.doesNotMatch(app,/voice-call'\)\.textContent/);
   assert.match(activity,/evaluateJavascript/);
   assert.match(activity,/handleNativeBack/);
   assert.match(activity,/POST_NOTIFICATIONS/);
   assert.match(activity,/NOTIFICATION_PERMISSION_REQUEST/);
+  assert.match(activity,/wakeLiveSession/);
+  assert.match(activity,/protected void onResume/);
   assert.doesNotMatch(activity,/super\.onBackPressed/);
 
   assert.equal(manifest.id,'/');

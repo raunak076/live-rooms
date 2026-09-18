@@ -141,3 +141,12 @@ body.chat-open #send::after{display:none!important}
 .bottom-nav .nav-icon{display:grid;place-items:center;height:24px;font-size:20px;line-height:1}
 .bottom-nav button>span:last-child{font-size:12px;font-weight:650}
 @media(min-width:761px){.bottom-nav{bottom:30px!important}}
+
+/* Android-first call control: icon only, with state shown by colour rather than text. */
+.call-icon-only svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.call-icon-only.in-call{background:color-mix(in srgb,var(--accent) 22%,transparent)!important;color:var(--accent)!important;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent)}
+
+/* Horizontal page swipe keeps the bottom navigation and content in sync. */
+#lobby,.tab-view{touch-action:pan-y}
+.tab-swipe-in{animation:tab-swipe-in .34s cubic-bezier(.2,.82,.25,1)}
+@keyframes tab-swipe-in{from{opacity:.65;transform:translateX(18px)}to{opacity:1;transform:none}}

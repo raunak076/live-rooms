@@ -30,6 +30,7 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_PERMISSION_REQUEST = 1003;
 
     private WebView webView;
+    private boolean pageReady;
     private PermissionRequest pendingWebPermissionRequest;
     private ValueCallback<Uri[]> filePathCallback;
 
@@ -51,6 +52,8 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setOffscreenPreRaster(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setAllowContentAccess(true);
         settings.setAllowFileAccess(true);
@@ -62,6 +65,13 @@ public class MainActivity extends Activity {
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                pageReady = true;
+                wakeLiveSession();
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
@@ -108,6 +118,27 @@ public class MainActivity extends Activity {
 
         if (savedInstanceState == null) webView.loadUrl(APP_URL);
         else webView.restoreState(savedInstanceState);
+    }
+
+    private void wakeLiveSession() {
+        if (webView == null || !pageReady) return;
+        webView.evaluateJavascript(
+                "window.handleNativeResume ? String(window.handleNativeResume()) : 'false'",
+                null
+        );
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (webView != null) webView.onResume();
+        wakeLiveSession();
+    }
+
+    @Override
+    protected void onPause() {
+        if (webView != null) webView.onPause();
+        super.onPause();
     }
 
     private void handleWebPermissionRequest(PermissionRequest request) {

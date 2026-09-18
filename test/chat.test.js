@@ -21,7 +21,7 @@ test('real-time delivery, DM isolation, ownership, deduplication, AI routing and
     const b=await rpc(bob,'auth',{username:'bob',password:'strong-password',register:true});const e=await rpc(eve,'auth',{username:'eve',password:'strong-password',register:true});
     const {room}=await rpc(alice,'enter',{roomName:'Engineering'});await rpc(bob,'enter',{roomId:room.id});
     const keyResponse=await fetch('http://localhost:'+port+'/api/push/public-key');assert.equal(keyResponse.status,200);assert.ok((await keyResponse.json()).publicKey);
-    const rtcResponse=await fetch('http://localhost:'+port+'/api/webrtc-config');assert.equal(rtcResponse.status,200);const rtcConfig=await rtcResponse.json();assert.ok(rtcConfig.iceServers.some(server=>String(server.urls).includes('turn:')));
+    const rtcResponse=await fetch('http://localhost:'+port+'/api/webrtc-config');assert.equal(rtcResponse.status,200);const rtcConfig=await rtcResponse.json();const turn=rtcConfig.iceServers.find(server=>String(server.urls).includes('turn:'));assert.ok(turn);assert.ok(turn.urls.some(url=>url.includes('transport=udp')));assert.ok(turn.urls.some(url=>url.includes('transport=tcp')));assert.ok(turn.urls.some(url=>url.startsWith('turns:')));
     const subscribed=await fetch('http://localhost:'+port+'/api/push/subscribe',{method:'POST',headers:{Authorization:'Bearer '+b.token,'Content-Type':'application/json'},body:JSON.stringify({endpoint:'https://push.example/bob',keys:{p256dh:'test-key',auth:'test-auth'}})});assert.equal(subscribed.status,200);
     const ringing=once(bob,'call:ring');const aliceCall=await rpc(alice,'call:join',{roomId:room.id});assert.equal((await ringing)[0].callId,aliceCall.callId);
     await new Promise(resolve=>setImmediate(resolve));assert.ok(pushes.some(item=>item.payload.type==='call'&&item.payload.callId===aliceCall.callId));
@@ -29,6 +29,7 @@ test('real-time delivery, DM isolation, ownership, deduplication, AI routing and
     const relayed=once(alice,'call:signal');await rpc(bob,'call:signal',{roomId:room.id,callId:bobCall.callId,target:bobCall.participants[0].socketId,signal:{description:{type:'offer',sdp:'test'}}});assert.equal((await relayed)[0].user,'bob');
     assert.match((await rpc(eve,'call:join',{roomId:room.id})).error,/Join/);await rpc(alice,'call:leave',{roomId:room.id});const callEnded=once(alice,'call:ended');await rpc(bob,'call:leave',{roomId:room.id});assert.equal((await callEnded)[0].callId,aliceCall.callId);
     const arrival=once(bob,'message');const sent=await rpc(alice,'send',{roomId:room.id,text:'hello',clientId:'hello-1'});assert.equal((await arrival)[0].text,'hello');
+    const synced=await fetch('http://localhost:'+port+'/api/sync?roomId='+room.id,{headers:{Authorization:'Bearer '+a.token}});assert.equal(synced.status,200);const syncData=await synced.json();assert.equal(syncData.user,'alice');assert.ok(syncData.room.messages.some(message=>message.id===sent.message.id));
     await new Promise(resolve=>setImmediate(resolve));assert.ok(pushes.some(item=>item.payload.type==='message'&&item.payload.body==='hello'));
     assert.equal(aiCalls,0);
     const dup=await rpc(alice,'send',{roomId:room.id,text:'hello',clientId:'hello-1'});assert.equal(dup.message.id,sent.message.id);
