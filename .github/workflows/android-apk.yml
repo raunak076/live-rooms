@@ -5,10 +5,15 @@ on:
     paths:
       - 'android/**'
       - '.github/workflows/android-apk.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-apk.yml'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
@@ -43,3 +48,13 @@ jobs:
           path: LiveRooms.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish APK download
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          cp LiveRooms.apk public/LiveRooms.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/LiveRooms.apk
+          git diff --cached --quiet || git commit -m "Update Android APK"
+          git push
