@@ -30,6 +30,12 @@ stopRingtone=function(){
 };
 
 enablePush=async function(){
+  if(nativeAndroid&&window.LiveRoomsNative){
+    window.LiveRoomsNative.startNotifications(token,user||'');
+    notificationsEnabled=true;
+    $('notification-prompt').hidden=true;
+    return;
+  }
   unlockRingtone();
   if(!swRegistration||!('Notification'in window)||!('PushManager'in window))throw new Error('Notifications are not supported in this browser.');
   const permission=await Notification.requestPermission();

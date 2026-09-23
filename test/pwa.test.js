@@ -31,6 +31,7 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(sw,/silent:false/);
   assert.match(sw,/vibrate:isCall/);
   assert.match(sw,/platform-fixes\.js\?v=stable-1/);
+  assert.match(sw,/experience\.css\?v=experience-1/);
   assert.match(sw,/whatsapp\.css\?v=android-call-5/);
   assert.match(index,/id="theme-picker"/);
   assert.match(index,/id="chat-bg-color"/);
@@ -56,8 +57,17 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(nativeService,/call:ring/);
   assert.match(nativeService,/Socket\.EVENT_CONNECT/);
   assert.match(index,/id="boot-screen"/);
-  assert.match(index,/id="toolbar-search" class="add-contact-button"/);
+  assert.match(index,/id="toolbar-search" class="add-contact-fab"/);
   assert.match(app,/chat:preference/);
+  assert.match(index,/id="camera-picker"[^>]+capture="environment"/);
+  assert.match(index,/id="profile-about"/);
+  assert.match(index,/id="profile-read-receipts"/);
+  assert.match(index,/id="delete-account"/);
+  assert.match(app,/message:read/);
+  assert.match(app,/call:declined/);
+  assert.match(nativeService,/RemoteInput/);
+  assert.match(nativeService,/"Reply"/);
+  assert.match(nativeService,/"Clear"/);
   assert.doesNotMatch(activity,/super\.onBackPressed/);
 
   assert.equal(manifest.id,'/');
