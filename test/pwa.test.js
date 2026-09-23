@@ -9,6 +9,7 @@ test('Android download, background push and call alert regression guards',()=>{
   const fixes=read('public/platform-fixes.js');
   const sw=read('public/sw.js');
   const app=read('public/app.js');
+  const experience=read('public/experience.css');
   const activity=read('android/app/src/main/java/com/raunak/liverooms/MainActivity.java');
   const nativeService=read('android/app/src/main/java/com/raunak/liverooms/NotificationService.java');
   const manifest=JSON.parse(read('public/manifest.webmanifest'));
@@ -31,8 +32,8 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(sw,/silent:false/);
   assert.match(sw,/vibrate:isCall/);
   assert.match(sw,/platform-fixes\.js\?v=stable-1/);
-  assert.match(sw,/experience\.css\?v=experience-3/);
-  assert.match(sw,/live-chat-shell-v13/);
+  assert.match(sw,/experience\.css\?v=experience-4/);
+  assert.match(sw,/live-chat-shell-v14/);
   assert.match(sw,/whatsapp\.css\?v=android-call-5/);
   assert.match(index,/id="theme-picker"/);
   assert.match(index,/id="chat-bg-color"/);
@@ -71,6 +72,11 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(app,/dataset\.activeTab/);
   assert.match(app,/message-author/);
   assert.match(app,/cache:'no-store'/);
+  assert.match(experience,/\.attachment-menu\[hidden\]/);
+  assert.match(experience,/\.chat-avatar img:not\(\[hidden\]\)/);
+  assert.equal((index.match(/id="attachment-menu"/g)||[]).length,1);
+  assert.match(index,/<section id="chat"[\s\S]*id="attachment-menu"[\s\S]*<\/section>\s*<nav id="bottom-nav"/);
+  assert.match(index,/id="speaker-call"[\s\S]*<svg/);
   assert.match(nativeService,/RemoteInput/);
   assert.match(nativeService,/"Reply"/);
   assert.match(nativeService,/"Clear"/);

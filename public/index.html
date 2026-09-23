@@ -16,9 +16,9 @@
   <link rel="stylesheet" href="/features.css?v=chat-actions-profile-1">
   <link rel="stylesheet" href="/whatsapp.css?v=android-call-5">
   <link rel="stylesheet" href="/android-stability.css?v=stable-2">
-  <link rel="stylesheet" href="/experience.css?v=experience-3">
+  <link rel="stylesheet" href="/experience.css?v=experience-4">
   <script defer src="/socket.io/socket.io.js"></script>
-  <script defer src="/app.js?v=stable-4"></script>
+  <script defer src="/app.js?v=stable-5"></script>
   <script defer src="/platform-fixes.js?v=stable-1"></script>
 </head>
 <body class="app-booting">
@@ -82,7 +82,7 @@
         <div id="active-call" class="active-call call-screen" role="dialog" aria-modal="true" aria-label="Voice call" hidden>
           <div class="call-screen-top"><span class="call-pulse"></span><span id="call-status">Calling…</span></div>
           <div class="call-person"><div id="call-avatar" class="call-avatar" aria-hidden="true">#</div><h2 id="call-peer">Voice call</h2><span id="call-time">00:00</span><small id="call-participants">1 participant</small></div>
-          <div class="call-screen-actions"><button id="speaker-call" type="button" aria-pressed="true"><span class="call-control-icon">🔊</span><span id="speaker-label">Speaker</span></button><button id="mute-call" type="button" aria-pressed="false"><span class="call-control-icon">🎙</span><span id="mute-label">Mute</span></button><button id="end-call" type="button" class="call-danger"><span class="call-control-icon">☎</span><span>End</span></button></div>
+          <div class="call-screen-actions"><button id="speaker-call" type="button" aria-pressed="true"><span class="call-control-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6L8 10H4Z"/><path d="M16 9c1.3 1.7 1.3 4.3 0 6M19 6c3 3.3 3 8.7 0 12"/></svg></span><span id="speaker-label">Speaker</span></button><button id="mute-call" type="button" aria-pressed="false"><span class="call-control-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></span><span id="mute-label">Mute</span></button><button id="end-call" type="button" class="call-danger"><span class="call-control-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 15c4.3-3.2 9.7-3.2 14 0l-2 4-4-2v-3h-2v3l-4 2-2-4Z"/></svg></span><span>End</span></button></div>
           <div id="remote-audio" hidden></div>
         </div>
         <div id="messages" role="log" aria-label="Room messages" aria-live="polite"></div>
@@ -97,6 +97,7 @@
           <div class="composer-row"><button id="attachment-button" class="media-button" type="button" aria-label="Add attachment"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><button id="attach-image" type="button" hidden>Image</button><button id="attach-audio" type="button" hidden>Audio</button><button id="record-audio" type="button" hidden aria-pressed="false">Record</button><label class="sr-only" for="message">Message</label><textarea id="message" rows="1" maxlength="4000" placeholder="Message"></textarea><button id="mention" class="gemini-button" type="button" aria-label="Ask Gemini">✦</button><button id="send" type="submit" aria-label="Send message"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 17 8-17 8 3-8-3-8Z"/><path d="M7 12h14"/></svg></button></div>
           <span id="composer-hint" hidden></span>
         </form>
+        <div id="attachment-menu" class="attachment-menu" hidden><button id="attachment-camera" type="button"><span>📸</span>Camera</button><button id="attachment-image" type="button"><span>🖼</span>Gallery</button><button id="attachment-audio" type="button"><span>♫</span>Audio</button><button id="attachment-record" type="button"><span>🎙</span>Record</button></div>
       </section>
       <nav id="bottom-nav" class="bottom-nav" aria-label="Main sections" hidden><button id="tab-chats" type="button" class="active"><span class="nav-icon">◌</span><span>Chats</span></button><button id="tab-calls" type="button"><span class="nav-icon">☎</span><span>Calls</span></button><button id="tab-profile" type="button"><span class="nav-icon">♙</span><span>Profile</span></button></nav>
       <div id="message-actions" class="modal-backdrop" hidden><section class="action-sheet" role="dialog" aria-modal="true" aria-labelledby="message-actions-title"><div class="sheet-handle"></div><h3 id="message-actions-title">Message actions</h3><button id="action-reply" type="button">↩ Reply</button><button id="action-edit" type="button">✎ Edit</button><button id="action-delete" type="button" class="danger-text">🗑 Delete</button><button id="action-cancel" type="button" class="secondary">Cancel</button></section></div>
@@ -105,7 +106,6 @@
       <div id="image-viewer" class="image-viewer" hidden><button id="close-image" type="button" aria-label="Close image">×</button><img id="full-image" alt="Opened chat image"></div>
       <div id="home-menu" class="popup-menu" hidden><button id="menu-add-contact" type="button">Add contact</button><button id="toolbar-create" type="button">Create group</button><button id="toolbar-join" type="button">Join group</button><button id="profile-shortcut" type="button">Profile</button><button id="menu-notifications" type="button">Enable notifications</button><a id="download-android" href="/LiveRooms.apk" download="LiveRooms.apk">Download Android app</a><button id="toolbar-logout" type="button">Logout</button></div>
       <div id="chat-menu" class="popup-menu" hidden><button id="pin-chat" type="button">Pin chat</button><button id="archive-chat" type="button">Archive chat</button><button id="clear-chat" type="button">Clear chat</button><button id="block-contact" type="button" hidden>Block</button><button id="invite" type="button">Copy invite</button><button id="chat-theme" type="button">Change theme</button></div>
-      <div id="attachment-menu" class="attachment-menu" hidden><button id="attachment-camera" type="button"><span>📸</span>Camera</button><button id="attachment-image" type="button"><span>🖼</span>Gallery</button><button id="attachment-audio" type="button"><span>♫</span>Audio</button><button id="attachment-record" type="button"><span>🎙</span>Record</button></div>
       <p id="notice" role="alert" hidden></p>
     </main>
   </div>
