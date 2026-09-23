@@ -50,6 +50,7 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
   if(!userColumns.has('avatar_file'))db.exec('ALTER TABLE users ADD COLUMN avatar_file TEXT');
   if(!userColumns.has('avatar_mime'))db.exec('ALTER TABLE users ADD COLUMN avatar_mime TEXT');
   if(!userColumns.has('avatar_updated'))db.exec('ALTER TABLE users ADD COLUMN avatar_updated INTEGER');
+  if(!userColumns.has('avatar_data'))db.exec('ALTER TABLE users ADD COLUMN avatar_data BLOB');
   if(!userColumns.has('about'))db.exec("ALTER TABLE users ADD COLUMN about TEXT NOT NULL DEFAULT 'Hey there! I am using Live Chat.'");
   if(!userColumns.has('read_receipts'))db.exec('ALTER TABLE users ADD COLUMN read_receipts INTEGER NOT NULL DEFAULT 1');
   const sql=(q,...args)=>db.prepare(q).all(...args);
@@ -98,13 +99,13 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
     if(!['image/jpeg','image/png','image/webp'].includes(mime)||!Buffer.isBuffer(req.body)||!req.body.length)return res.status(400).json({error:'Choose a JPG, PNG or WebP image.'});
     const extension=mime==='image/png'?'.png':mime==='image/webp'?'.webp':'.jpg',fileName=username+'-'+randomUUID()+extension;
     await writeFile(join(avatarRoot,fileName),req.body,{flag:'wx'});const updated=Date.now();
-    run('UPDATE users SET avatar_file=?,avatar_mime=?,avatar_updated=? WHERE username=?',fileName,mime,updated,username);
+    run('UPDATE users SET avatar_file=?,avatar_mime=?,avatar_updated=?,avatar_data=? WHERE username=?',fileName,mime,updated,req.body,username);
     for(const membership of sql('SELECT room_id FROM memberships WHERE username=?',username))for(const member of sql('SELECT username FROM memberships WHERE room_id=?',membership.room_id))refresh(member.username);
     io.to('user:'+username).emit('profile:updated',{username,avatarUpdated:updated});res.json({ok:true,avatarUpdated:updated});
   });
   app.get('/api/profile/avatar/:username',(req,res)=>{
-    if(!sessionUser(req))return res.status(401).end();const row=get('SELECT avatar_file,avatar_mime FROM users WHERE username=?',req.params.username);
-    if(!row?.avatar_file)return res.status(404).end();res.setHeader('Cache-Control','private,max-age=3600');res.type(row.avatar_mime);res.sendFile(join(avatarRoot,row.avatar_file));
+    if(!sessionUser(req))return res.status(401).end();const row=get('SELECT avatar_file,avatar_mime,avatar_data FROM users WHERE username=?',req.params.username);
+    if(!row?.avatar_file&&!row?.avatar_data)return res.status(404).end();res.setHeader('Cache-Control','private,max-age=3600');res.type(row.avatar_mime);if(row.avatar_data)return res.send(row.avatar_data);res.sendFile(join(avatarRoot,row.avatar_file));
   });
   const allowedMedia=new Map([['image/jpeg','.jpg'],['image/png','.png'],['image/webp','.webp'],['image/gif','.gif'],['audio/webm','.webm'],['audio/ogg','.ogg'],['audio/mpeg','.mp3'],['audio/mp4','.m4a'],['audio/x-m4a','.m4a'],['audio/aac','.aac'],['audio/wav','.wav']]);
   app.post('/api/media/:roomId',express.raw({type:[...allowedMedia.keys()],limit:'8mb'}),async(req,res)=>{

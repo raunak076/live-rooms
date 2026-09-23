@@ -31,8 +31,8 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(sw,/silent:false/);
   assert.match(sw,/vibrate:isCall/);
   assert.match(sw,/platform-fixes\.js\?v=stable-1/);
-  assert.match(sw,/experience\.css\?v=experience-2/);
-  assert.match(sw,/live-chat-shell-v12/);
+  assert.match(sw,/experience\.css\?v=experience-3/);
+  assert.match(sw,/live-chat-shell-v13/);
   assert.match(sw,/whatsapp\.css\?v=android-call-5/);
   assert.match(index,/id="theme-picker"/);
   assert.match(index,/id="chat-bg-color"/);
@@ -69,6 +69,8 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(app,/animateSendFlight/);
   assert.match(app,/chat-enter/);
   assert.match(app,/dataset\.activeTab/);
+  assert.match(app,/message-author/);
+  assert.match(app,/cache:'no-store'/);
   assert.match(nativeService,/RemoteInput/);
   assert.match(nativeService,/"Reply"/);
   assert.match(nativeService,/"Clear"/);
