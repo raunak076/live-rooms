@@ -52,7 +52,9 @@ Get a key at https://aistudio.google.com/apikey. The model is configurable: use 
 - Low-latency WebRTC voice calls in group rooms and private chats, with incoming-call prompts, mute, call duration, participant count and clean hang-up handling.
 - Installable PWA experience on supported desktop and mobile browsers, with an iPhone/iPad Add to Home Screen hint.
 - Permission-based Web Push notifications for new messages and incoming calls, including system notification sound/vibration when the OS and browser allow it.
+- Android notification actions for replying or clearing a message without opening the chat.
 - Authenticated image, audio-file and recorded voice-note sharing (up to 8 MB per attachment).
+- Camera capture, multi-contact group creation, profile About text and optional read receipts.
 - `@gemini` mentions trigger an AI answer in the same room; ordinary messages do not call AI.
 - Delete your own messages for everyone. The server checks ownership and replaces retained content with a tombstone.
 - SQLite persistence for accounts, hashed sessions, room membership and the most recent 100 messages per chat.
@@ -68,9 +70,9 @@ After signing in, click **Allow** on the notification card so messages and incom
 
 Each AI mention sends up to 20 recent, non-deleted messages from that chat to Google. Its reply is visible to everyone in the chat. Deleting a message removes its text from the application's retained history, but cannot retract data already seen by participants, sent to Google, copied, or included in an earlier AI response. Database backups and SQLite WAL pages are not secure-erased by a deletion. Pending AI replies are suppressed when their trigger message was deleted before completion.
 
-Room invites grant access to anyone signed in who has the link. DMs cannot be joined by outsiders, even if their ID is known. This is not end-to-end encrypted chat: the server stores message text and can read it. Session tokens are stored in browser local storage and only their hashes are stored in SQLite. Sign out revokes the current token. No password-reset or account-deletion flow is included.
+Room invites grant access to anyone signed in who has the link. DMs cannot be joined by outsiders, even if their ID is known. This is not end-to-end encrypted chat: the server stores message text and can read it. Session tokens are stored in browser local storage and only their hashes are stored in SQLite. Sign out revokes the current token. Account deletion is password-confirmed from Profile; password reset is not included.
 
-This version retains 100 messages per conversation. Older messages are automatically removed. Rooms and contacts remain across server restarts. Unread badges are per active browser session, not durable read receipts. Presence means connected to the service, not necessarily currently viewing that conversation.
+This version retains 100 messages per conversation. Older messages are automatically removed. Rooms and contacts remain across server restarts. Unread badges are per active browser session. Direct-message read receipts persist unless the reader disables them in Profile. Presence means connected to the service, not necessarily currently viewing that conversation.
 
 Uploaded media is stored under the persistent `data/uploads` directory and is served only after session and room-membership checks. Deleting its chat message makes the media endpoint unavailable, although the underlying file is retained for operational recovery.
 
@@ -88,7 +90,7 @@ Open port 3000 locally. For internet access, configure a domain, HTTPS proxy and
 
 Performance choices reduce avoidable client wait time, but no internet latency SLA or load-tested capacity is claimed. Gemini response time is separate from chat delivery. For multiple server instances, move persistence to a shared database, use the Socket.IO Redis adapter, centralize rate limits, and load-test before scaling. The built-in limits are basic abuse controls, not a complete internet-scale defense.
 
-Microphone access works on `localhost` during development and requires HTTPS when deployed. The included public STUN servers are enough for many networks. For reliable calls across restrictive office/mobile NATs, configure a TURN service and replace or extend `iceServers` in `public/app.js`. Group calls use a peer-to-peer mesh, which is best for small rooms; use an SFU such as LiveKit, mediasoup or Janus before supporting large voice rooms.
+Microphone access works on `localhost` during development and requires HTTPS when deployed. The server supplies STUN plus TURN/turns routes to the browser and the client performs an ICE restart when the selected path fails. For reliable calls across restrictive office/mobile NATs, configure `TURN_HOST`, `TURN_URLS` and either `TURN_USERNAME` + `TURN_CREDENTIAL` or `TURN_SECRET` in production. Group calls use a peer-to-peer mesh, which is best for small rooms; use an SFU such as LiveKit, mediasoup or Janus before supporting large voice rooms.
 
 ## Verification
 
