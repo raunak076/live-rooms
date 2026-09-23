@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -33,6 +34,8 @@ public class MainActivity extends Activity {
     private boolean pageReady;
     private PermissionRequest pendingWebPermissionRequest;
     private ValueCallback<Uri[]> filePathCallback;
+    private String pendingRoomId;
+    private String pendingCallId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,6 +45,8 @@ public class MainActivity extends Activity {
         webView = new WebView(this);
         webView.setBackgroundColor(Color.parseColor("#0b141a"));
         setContentView(webView);
+        webView.addJavascriptInterface(new NativeBridge(), "LiveRoomsNative");
+        captureNotificationIntent(getIntent());
 
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -70,6 +75,7 @@ public class MainActivity extends Activity {
                 super.onPageFinished(view, url);
                 pageReady = true;
                 wakeLiveSession();
+                deliverNotificationIntent();
             }
 
             @Override
@@ -120,6 +126,14 @@ public class MainActivity extends Activity {
         else webView.restoreState(savedInstanceState);
     }
 
+    private class NativeBridge {
+        @JavascriptInterface public void startNotifications(String token,String username){if(token==null||!token.matches("[a-f0-9]{64}")||username==null||!username.matches("[a-z0-9_]{3,24}"))return;Intent service=new Intent(MainActivity.this,NotificationService.class).putExtra(NotificationService.EXTRA_TOKEN,token).putExtra(NotificationService.EXTRA_USERNAME,username);runOnUiThread(()->{if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O)startForegroundService(service);else startService(service);});}
+        @JavascriptInterface public void stopNotifications(){getSharedPreferences(NotificationService.PREFS,MODE_PRIVATE).edit().clear().apply();runOnUiThread(()->stopService(new Intent(MainActivity.this,NotificationService.class)));}
+    }
+    private void captureNotificationIntent(Intent intent){if(intent==null)return;String roomId=intent.getStringExtra(NotificationService.EXTRA_ROOM_ID),callId=intent.getStringExtra(NotificationService.EXTRA_CALL_ID);if(roomId!=null&&roomId.matches("[a-f0-9]{24}"))pendingRoomId=roomId;if(callId!=null&&callId.matches("[a-f0-9-]{20,64}"))pendingCallId=callId;}
+    private void deliverNotificationIntent(){if(!pageReady||pendingRoomId==null)return;String roomId=pendingRoomId,callId=pendingCallId==null?"":pendingCallId;pendingRoomId=null;pendingCallId=null;webView.evaluateJavascript("window.handleNativeNotification && window.handleNativeNotification('"+roomId+"','"+callId+"')",null);}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);captureNotificationIntent(intent);deliverNotificationIntent();}
+
     private void wakeLiveSession() {
         if (webView == null || !pageReady) return;
         webView.evaluateJavascript(
@@ -131,12 +145,14 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        getSharedPreferences(NotificationService.PREFS,MODE_PRIVATE).edit().putBoolean("app_foreground",true).apply();
         if (webView != null) webView.onResume();
         wakeLiveSession();
     }
 
     @Override
     protected void onPause() {
+        getSharedPreferences(NotificationService.PREFS,MODE_PRIVATE).edit().putBoolean("app_foreground",false).apply();
         if (webView != null) webView.onPause();
         super.onPause();
     }
@@ -201,6 +217,7 @@ public class MainActivity extends Activity {
                 handled -> {
                     if (handled != null && handled.contains("true")) return;
                     if (webView.canGoBack()) webView.goBack();
+                    else moveTaskToBack(true);
                 }
         );
     }

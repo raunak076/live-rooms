@@ -42,6 +42,8 @@ test('real-time delivery, DM isolation, ownership, deduplication, AI routing and
     const aiReply=new Promise(resolve=>bob.on('message',m=>{if(m.kind==='ai')resolve(m);}));
     await rpc(alice,'send',{roomId:room.id,text:'@gemini help us',clientId:'ai-1'});assert.equal((await aiReply).text,'Mocked AI answer');assert.equal(aiCalls,1);
     const dm=(await rpc(alice,'direct',{username:'bob'})).room;assert.equal(dm.direct,true);
+    const pinned=await rpc(alice,'chat:preference',{roomId:dm.id,pinned:true});assert.equal(pinned.room.pinned,true);assert.equal((await rpc(alice,'auth',{})).chats[0].id,dm.id);
+    const archived=await rpc(alice,'chat:preference',{roomId:dm.id,archived:true});assert.equal(archived.room.archived,true);assert.equal((await rpc(alice,'chat:preference',{roomId:dm.id,archived:false})).room.archived,false);
     assert.match((await rpc(eve,'enter',{roomId:dm.id})).error,/not found/);
     assert.match((await rpc(eve,'send',{roomId:dm.id,text:'intrusion',clientId:'bad'})).error,/Join/);
     const dmArrival=once(bob,'message');const dmSent=await rpc(alice,'send',{roomId:dm.id,text:'private hello',clientId:'dm-1'});assert.equal((await dmArrival)[0].text,'private hello');

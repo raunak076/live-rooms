@@ -10,9 +10,10 @@ test('Android download, background push and call alert regression guards',()=>{
   const sw=read('public/sw.js');
   const app=read('public/app.js');
   const activity=read('android/app/src/main/java/com/raunak/liverooms/MainActivity.java');
+  const nativeService=read('android/app/src/main/java/com/raunak/liverooms/NotificationService.java');
   const manifest=JSON.parse(read('public/manifest.webmanifest'));
 
-  assert.match(index,/platform-fixes\.js\?v=android-resume-4/);
+  assert.match(index,/platform-fixes\.js\?v=stable-1/);
   assert.doesNotThrow(()=>new Function(fixes));
   assert.doesNotThrow(()=>new Function(sw));
 
@@ -29,7 +30,7 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(sw,/requireInteraction:isCall/);
   assert.match(sw,/silent:false/);
   assert.match(sw,/vibrate:isCall/);
-  assert.match(sw,/platform-fixes\.js\?v=android-resume-4/);
+  assert.match(sw,/platform-fixes\.js\?v=stable-1/);
   assert.match(sw,/whatsapp\.css\?v=android-call-5/);
   assert.match(index,/id="theme-picker"/);
   assert.match(index,/id="chat-bg-color"/);
@@ -50,6 +51,13 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(activity,/NOTIFICATION_PERMISSION_REQUEST/);
   assert.match(activity,/wakeLiveSession/);
   assert.match(activity,/protected void onResume/);
+  assert.match(activity,/LiveRoomsNative/);
+  assert.match(nativeService,/startForeground/);
+  assert.match(nativeService,/call:ring/);
+  assert.match(nativeService,/Socket\.EVENT_CONNECT/);
+  assert.match(index,/id="boot-screen"/);
+  assert.match(index,/id="toolbar-search" class="add-contact-button"/);
+  assert.match(app,/chat:preference/);
   assert.doesNotMatch(activity,/super\.onBackPressed/);
 
   assert.equal(manifest.id,'/');
