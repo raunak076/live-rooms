@@ -32,8 +32,8 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(sw,/silent:false/);
   assert.match(sw,/vibrate:isCall/);
   assert.match(sw,/platform-fixes\.js\?v=stable-1/);
-  assert.match(sw,/experience\.css\?v=experience-4/);
-  assert.match(sw,/live-chat-shell-v14/);
+  assert.match(sw,/experience\.css\?v=experience-5/);
+  assert.match(sw,/live-chat-shell-v15/);
   assert.match(sw,/whatsapp\.css\?v=android-call-5/);
   assert.match(index,/id="theme-picker"/);
   assert.match(index,/id="chat-bg-color"/);
@@ -46,6 +46,11 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(app,/handleNativeResume/);
   assert.match(app,/\/api\/sync/);
   assert.match(app,/touchstart/);
+  assert.match(app,/tab-drag-surface/);
+  assert.match(app,/message:react/);
+  assert.match(index,/id="emoji-sticker-tray"/);
+  assert.match(index,/id="reaction-picker"/);
+  assert.match(index,/id="answer-call"/);
   assert.match(index,/class="icon-button call-icon-only"/);
   assert.doesNotMatch(app,/voice-call'\)\.textContent/);
   assert.match(activity,/evaluateJavascript/);
@@ -55,6 +60,9 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(activity,/wakeLiveSession/);
   assert.match(activity,/protected void onResume/);
   assert.match(activity,/LiveRoomsNative/);
+  assert.match(activity,/setSpeakerphone/);
+  assert.match(activity,/setCommunicationDevice/);
+  assert.match(activity,/endCallAudio/);
   assert.match(nativeService,/startForeground/);
   assert.match(nativeService,/call:ring/);
   assert.match(nativeService,/Socket\.EVENT_CONNECT/);

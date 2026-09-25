@@ -6,6 +6,8 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -129,6 +131,8 @@ public class MainActivity extends Activity {
     private class NativeBridge {
         @JavascriptInterface public void startNotifications(String token,String username){if(token==null||!token.matches("[a-f0-9]{64}")||username==null||!username.matches("[a-z0-9_]{3,24}"))return;Intent service=new Intent(MainActivity.this,NotificationService.class).putExtra(NotificationService.EXTRA_TOKEN,token).putExtra(NotificationService.EXTRA_USERNAME,username);runOnUiThread(()->{if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O)startForegroundService(service);else startService(service);});}
         @JavascriptInterface public void stopNotifications(){getSharedPreferences(NotificationService.PREFS,MODE_PRIVATE).edit().clear().apply();runOnUiThread(()->stopService(new Intent(MainActivity.this,NotificationService.class)));}
+        @JavascriptInterface public void setSpeakerphone(boolean enabled){runOnUiThread(()->{AudioManager audio=(AudioManager)getSystemService(AUDIO_SERVICE);audio.setMode(AudioManager.MODE_IN_COMMUNICATION);if(Build.VERSION.SDK_INT>=31){int wanted=enabled?AudioDeviceInfo.TYPE_BUILTIN_SPEAKER:AudioDeviceInfo.TYPE_BUILTIN_EARPIECE;for(AudioDeviceInfo device:audio.getAvailableCommunicationDevices())if(device.getType()==wanted){audio.setCommunicationDevice(device);return;}if(!enabled)audio.clearCommunicationDevice();}else audio.setSpeakerphoneOn(enabled);});}
+        @JavascriptInterface public void endCallAudio(){runOnUiThread(()->{AudioManager audio=(AudioManager)getSystemService(AUDIO_SERVICE);if(Build.VERSION.SDK_INT>=31)audio.clearCommunicationDevice();else audio.setSpeakerphoneOn(false);audio.setMode(AudioManager.MODE_NORMAL);});}
     }
     private void captureNotificationIntent(Intent intent){if(intent==null)return;String roomId=intent.getStringExtra(NotificationService.EXTRA_ROOM_ID),callId=intent.getStringExtra(NotificationService.EXTRA_CALL_ID);if(roomId!=null&&roomId.matches("[a-f0-9]{24}"))pendingRoomId=roomId;if(callId!=null&&callId.matches("[a-f0-9-]{20,64}"))pendingCallId=callId;}
     private void deliverNotificationIntent(){if(!pageReady||pendingRoomId==null)return;String roomId=pendingRoomId,callId=pendingCallId==null?"":pendingCallId;pendingRoomId=null;pendingCallId=null;webView.evaluateJavascript("window.handleNativeNotification && window.handleNativeNotification('"+roomId+"','"+callId+"')",null);}

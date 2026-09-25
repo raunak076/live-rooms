@@ -72,12 +72,12 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
   });
   app.get('/api/health',(_,res)=>res.json({ok:true,aiConfigured:Boolean(process.env.GEMINI_API_KEY)}));
   app.get('/api/webrtc-config',(_,res)=>{
-    const expires=Math.floor(Date.now()/1000)+86400,username=expires+':livechat';
-    const credential=process.env.TURN_CREDENTIAL||createHmac('sha1',process.env.TURN_SECRET||'openrelayprojectsecret').update(process.env.TURN_USERNAME||username).digest('base64');
+    const expires=Math.floor(Date.now()/1000)+86400,temporaryUsername=expires+':livechat',staticCredentials=Boolean(process.env.TURN_USERNAME&&process.env.TURN_CREDENTIAL);
+    const username=staticCredentials?process.env.TURN_USERNAME:temporaryUsername;
+    const credential=staticCredentials?process.env.TURN_CREDENTIAL:createHmac('sha1',process.env.TURN_SECRET||'openrelayprojectsecret').update(temporaryUsername).digest('base64');
     const host=process.env.TURN_HOST||'staticauth.openrelay.metered.ca';
-    const turnUsername=process.env.TURN_USERNAME||username;
     const urls=process.env.TURN_URLS?.split(',').map(value=>value.trim()).filter(Boolean)||[`turn:${host}:80?transport=udp`,`turn:${host}:80?transport=tcp`,`turn:${host}:3478?transport=udp`,`turn:${host}:3478?transport=tcp`,`turn:${host}:443?transport=tcp`,`turns:${host}:443?transport=tcp`,`turns:${host}:5349?transport=tcp`];
-    res.setHeader('Cache-Control','no-store');res.json({iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.cloudflare.com:3478']},{urls,username:turnUsername,credential}]});
+    res.setHeader('Cache-Control','no-store');res.json({iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.cloudflare.com:3478']},{urls,username,credential}]});
   });
   app.get('/api/push/public-key',(_,res)=>res.json({publicKey:vapidKeys.publicKey}));
   app.post('/api/push/subscribe',express.json({limit:'32kb'}),(req,res)=>{
@@ -250,7 +250,8 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
       const mention=/(^|\s)@gemini\b/i.test(p.text);
       if(mention){if(Date.now()-aiWindow>60000){aiWindow=Date.now();aiRequests=0;}if(busy.has(p.roomId)||Date.now()-(lastAI.get(p.roomId)||0)<5000||aiActive>=4||aiRequests>=20)return ack({error:'Gemini is busy. Try again shortly.'});}
       let reply=null;if(typeof p.replyTo==='string'){const source=get('SELECT body FROM messages WHERE id=? AND room_id=?',p.replyTo,p.roomId);if(source){const original=JSON.parse(source.body);if(!original.deleted)reply={id:original.id,name:original.name,text:(original.text||original.attachment?.name||'Attachment').slice(0,180)};}}
-      const m=append(p.roomId,{id:socket.data.user+':'+p.clientId,name:socket.data.user,senderId:socket.data.user,text:p.text.trim(),kind:'user',reply});ack({ok:true,message:m});
+      const sticker=Boolean(p.sticker&&/^\p{Extended_Pictographic}(?:[\uFE0F\u200D\p{Extended_Pictographic}\p{Emoji_Modifier}]+)?$/u.test(p.text.trim()));
+      const m=append(p.roomId,{id:socket.data.user+':'+p.clientId,name:socket.data.user,senderId:socket.data.user,text:p.text.trim(),kind:'user',reply,sticker});ack({ok:true,message:m});
       void notifyRoom(p.roomId,socket.data.user,{type:'message',title:socket.data.user,body:m.text.slice(0,180),url:'/?room='+p.roomId,roomId:p.roomId,tag:'message-'+m.id});
       if(!mention)return;
       busy.add(p.roomId);lastAI.set(p.roomId,Date.now());aiActive++;aiRequests++;
@@ -260,6 +261,14 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
         if(source&&!JSON.parse(source.body).deleted)append(p.roomId,{name:'Gemini',kind:'ai',text});
       }catch(error){append(p.roomId,{name:'System',kind:'error',text:error.name==='TimeoutError'?'Gemini took too long. Please retry.':error.message});}
       finally{busy.delete(p.roomId);aiActive--;io.to(p.roomId).emit('thinking',{roomId:p.roomId,busy:false});}
+    });
+    handler('message:react',(p,ack)=>{
+      if(typeof p.id!=='string'||typeof p.emoji!=='string'||![...p.emoji].length||p.emoji.length>12)return ack({error:'Choose a valid reaction.'});
+      const row=get('SELECT body FROM messages WHERE id=?',p.id);if(!row)return ack({error:'Message not found.'});const m=JSON.parse(row.body);
+      if(m.deleted||!hasRoom(m.roomId,socket.data.user))return ack({error:'This message cannot be reacted to.'});
+      const reactions=m.reactions&&typeof m.reactions==='object'?m.reactions:{},wasReacted=Boolean(reactions[p.emoji]?.includes(socket.data.user));for(const emoji of Object.keys(reactions)){reactions[emoji]=reactions[emoji].filter(name=>name!==socket.data.user);if(!reactions[emoji].length)delete reactions[emoji];}
+      if(!wasReacted)(reactions[p.emoji]??=[]).push(socket.data.user);
+      m.reactions=reactions;run('UPDATE messages SET body=? WHERE id=?',JSON.stringify(m),m.id);io.to(m.roomId).emit('message:updated',m);ack({ok:true,message:m});
     });
     handler('message:edit',(p,ack)=>{if(typeof p.id!=='string'||typeof p.text!=='string'||!p.text.trim()||p.text.length>4000)return ack({error:'Enter a message of 1–4,000 characters.'});const row=get('SELECT body FROM messages WHERE id=?',p.id);if(!row)return ack({error:'Message not found.'});const m=JSON.parse(row.body);if(m.senderId!==socket.data.user||m.deleted||m.attachment||!hasRoom(m.roomId,socket.data.user))return ack({error:'This message cannot be edited.'});m.text=p.text.trim();m.edited=true;m.editedAt=Date.now();run('UPDATE messages SET body=? WHERE id=?',JSON.stringify(m),m.id);io.to(m.roomId).emit('message:updated',m);ack({ok:true,message:m});});
     handler('delete',(p,ack)=>{
