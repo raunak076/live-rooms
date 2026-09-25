@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY server.js ./
+COPY fish-bootstrap.js ./
 COPY public ./public
 RUN mkdir -p data
 EXPOSE 3000
