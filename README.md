@@ -54,6 +54,7 @@ Get a key at https://aistudio.google.com/apikey. The model is configurable: use 
 - Permission-based Web Push notifications for new messages and incoming calls, including system notification sound/vibration when the OS and browser allow it.
 - Android notification actions for replying or clearing a message without opening the chat.
 - Authenticated image, audio-file and recorded voice-note sharing (up to 8 MB per attachment).
+- Consent-based Singer accounts, voice enrollment review tickets, an approved voice catalog, rate-limited cloning and permanent AI-clone disclosure metadata.
 - Camera capture, multi-contact group creation, profile About text and optional read receipts.
 - `@gemini` mentions trigger an AI answer in the same room; ordinary messages do not call AI.
 - Delete your own messages for everyone. The server checks ownership and replaces retained content with a tombstone.
@@ -75,6 +76,22 @@ Room invites grant access to anyone signed in who has the link. DMs cannot be jo
 This version retains 100 messages per conversation. Older messages are automatically removed. Rooms and contacts remain across server restarts. Unread badges are per active browser session. Direct-message read receipts persist unless the reader disables them in Profile. Presence means connected to the service, not necessarily currently viewing that conversation.
 
 Uploaded media is stored under the persistent `data/uploads` directory and is served only after session and room-membership checks. Deleting its chat message makes the media endpoint unavailable, although the underlying file is retained for operational recovery.
+
+Singer enrollment samples are private server data under `data/voice-enrollment`; they are never exposed through a download route. A singer must explicitly attest ownership, and a model stays unavailable until a reviewer approves it. Singers can revoke their model at any time, which immediately removes it from the catalog and deletes its enrollment sample. Generated chat audio remains subject to normal message deletion behavior and always carries visible `AI voice clone` plus `Watermarked` metadata.
+
+## Consent-based voice processing
+
+Set a strong reviewer secret and connect a voice-processing service:
+
+```dotenv
+VOICE_REVIEW_KEY=replace_with_a_long_random_secret
+VOICE_CLONE_ENDPOINT=https://your-private-voice-service.example/convert
+VOICE_CLONE_API_KEY=your_private_service_key
+```
+
+Review a pending ticket with `POST /api/admin/voices/:id/review`, header `X-Voice-Review-Key`, and JSON body `{ "approved": true }` or `{ "approved": false, "reason": "…" }`. Keep this endpoint behind an admin service; never put the reviewer key in browser code.
+
+The processing endpoint receives multipart fields `source`, `consented_sample`, `model_id`, and `owner`. It must return a supported audio MIME type and `X-AI-Watermarked: true`. Live Chat rejects unwatermarked output instead of falling back to the original recording. Until this service is configured, enrollment and review work, but cloning returns a clear unavailable response.
 
 ## Hosting
 
