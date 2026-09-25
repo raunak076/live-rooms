@@ -52,3 +52,5 @@
 #auth-form select,.profile-card select{width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--text);font:inherit}
 @keyframes chat-full-open{from{transform:translate3d(100%,0,0);box-shadow:-16px 0 32px #0005}to{transform:translate3d(0,0,0);box-shadow:none}}
 @keyframes chat-full-close{from{transform:translate3d(0,0,0)}to{transform:translate3d(100%,0,0)}}
+
+.voice-consent{display:grid!important;grid-template-columns:24px minmax(0,1fr);align-items:start!important;gap:9px!important;width:100%!important;min-width:0}.voice-consent input{width:20px!important;height:20px!important;margin:1px 0 0!important}.voice-consent span{min-width:0;overflow-wrap:anywhere}
