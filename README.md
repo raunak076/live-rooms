@@ -85,13 +85,12 @@ Set a strong reviewer secret and connect a voice-processing service:
 
 ```dotenv
 VOICE_REVIEW_KEY=replace_with_a_long_random_secret
-VOICE_CLONE_ENDPOINT=https://your-private-voice-service.example/convert
-VOICE_CLONE_API_KEY=your_private_service_key
+ELEVENLABS_API_KEY=your_private_elevenlabs_key
 ```
 
-Review a pending ticket with `POST /api/admin/voices/:id/review`, header `X-Voice-Review-Key`, and JSON body `{ "approved": true }` or `{ "approved": false, "reason": "…" }`. Keep this endpoint behind an admin service; never put the reviewer key in browser code.
+Review a pending ticket with `POST /api/admin/voices/:id/review`, header `X-Voice-Review-Key`, and JSON body `{ "approved": true }` or `{ "approved": false, "reason": "…" }`. Keep this endpoint behind an admin service; never put the reviewer key in browser code. Approval creates a private ElevenLabs IVC model; sending uses the multilingual speech-to-speech model. Revocation deletes the provider model.
 
-The processing endpoint receives multipart fields `source`, `consented_sample`, `model_id`, and `owner`. It must return a supported audio MIME type and `X-AI-Watermarked: true`. Live Chat rejects unwatermarked output instead of falling back to the original recording. Until this service is configured, enrollment and review work, but cloning returns a clear unavailable response.
+Generated MP3 files receive an `AI_GENERATED` metadata watermark containing the internal model ID and consenting owner, while chat messages carry an always-visible disclosure badge. Until ElevenLabs is configured, enrollment works but approval and cloning return a clear unavailable response. A custom `VOICE_CLONE_ENDPOINT` remains supported as a fallback; it receives multipart fields `source`, `consented_sample`, `model_id`, and `owner` and must return a supported audio MIME type plus `X-AI-Watermarked: true`.
 
 ## Hosting
 
