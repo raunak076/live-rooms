@@ -1,5 +1,5 @@
-const CACHE='live-chat-shell-v15';
-const SHELL=['/','/style.css?v=chat-actions-profile-1','/mobile-fix.css?v=chat-actions-profile-1','/features.css?v=chat-actions-profile-1','/whatsapp.css?v=android-call-5','/android-stability.css?v=stable-2','/experience.css?v=experience-5','/app.js?v=stable-6','/platform-fixes.js?v=stable-1','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png'];
+const CACHE='live-chat-shell-v16';
+const SHELL=['/','/style.css?v=chat-actions-profile-1','/mobile-fix.css?v=chat-actions-profile-1','/features.css?v=chat-actions-profile-1','/whatsapp.css?v=android-call-5','/android-stability.css?v=stable-2','/experience.css?v=experience-6','/app.js?v=stable-7','/platform-fixes.js?v=stable-1','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png'];
 
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));

@@ -32,8 +32,8 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(sw,/silent:false/);
   assert.match(sw,/vibrate:isCall/);
   assert.match(sw,/platform-fixes\.js\?v=stable-1/);
-  assert.match(sw,/experience\.css\?v=experience-5/);
-  assert.match(sw,/live-chat-shell-v15/);
+  assert.match(sw,/experience\.css\?v=experience-6/);
+  assert.match(sw,/live-chat-shell-v16/);
   assert.match(sw,/whatsapp\.css\?v=android-call-5/);
   assert.match(index,/id="theme-picker"/);
   assert.match(index,/id="chat-bg-color"/);
@@ -47,6 +47,10 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(app,/\/api\/sync/);
   assert.match(app,/touchstart/);
   assert.match(app,/tab-drag-surface/);
+  assert.match(app,/showTab\(nextName,\{animate:false\}\)/);
+  assert.match(app,/voiceAltered/);
+  assert.match(app,/preservesPitch=false/);
+  assert.match(index,/id="voice-effect-picker"/);
   assert.match(app,/message:react/);
   assert.match(index,/id="emoji-sticker-tray"/);
   assert.match(index,/id="reaction-picker"/);

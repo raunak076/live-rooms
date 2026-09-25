@@ -114,11 +114,11 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
     if(!get('SELECT 1 FROM memberships WHERE room_id=? AND username=?',roomId,username))return res.status(403).json({error:'Join this chat before uploading.'});
     if(isBlocked(roomId,username))return res.status(403).json({error:'Messaging is unavailable while this contact is blocked.'});
     if(!allowedMedia.has(mime)||!Buffer.isBuffer(req.body)||!req.body.length)return res.status(400).json({error:'Choose a supported image or audio file.'});
-    const id=randomUUID(),fileName=id+allowedMedia.get(mime);let originalName='attachment';
+    const id=randomUUID(),fileName=id+allowedMedia.get(mime);let originalName='attachment';const allowedVoiceEffects=new Set(['original','deep','giant','helium','tiny']),requestedEffect=String(req.headers['x-voice-effect']||'original').toLowerCase(),voiceEffect=mime.startsWith('audio/')&&allowedVoiceEffects.has(requestedEffect)?requestedEffect:'original';
     try{originalName=decodeURIComponent(String(req.headers['x-file-name']||originalName)).replace(/[\r\n]/g,' ').slice(0,120)||originalName;}catch{}
     await writeFile(join(mediaRoot,fileName),req.body,{flag:'wx'});
     run('INSERT INTO media(id,room_id,uploader,file_name,mime,original_name,size) VALUES (?,?,?,?,?,?,?)',id,roomId,username,fileName,mime,originalName,req.body.length);
-    const attachment={id,type:mime.startsWith('image/')?'image':'audio',mime,name:originalName,size:req.body.length};
+    const attachment={id,type:mime.startsWith('image/')?'image':'audio',mime,name:originalName,size:req.body.length,...(mime.startsWith('audio/')?{voiceEffect,voiceAltered:voiceEffect!=='original'}:{})};
     const message=append(roomId,{name:username,senderId:username,text:'',kind:'user',attachment});
     run('UPDATE media SET message_id=? WHERE id=?',message.id,id);void notifyRoom(roomId,username,{type:'message',title:username,body:attachment.type==='image'?'Sent a photo':'Sent an audio message',url:'/?room='+roomId,roomId,tag:'message-'+message.id});
     res.status(201).json({ok:true,message});
