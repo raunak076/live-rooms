@@ -20,7 +20,7 @@ async function tryDedicatedTranscribe(originalInit,audioPart){
   const key=new Headers(originalInit.headers||{}).get('x-goog-api-key');if(!key)return null;
   const response=await baseFetch(GEMINI_HOST+'v1beta/models/gemini-3.5-transcribe:generateContent',{
     method:'POST',signal:AbortSignal.timeout(120000),headers:{'Content-Type':'application/json','x-goog-api-key':key},
-    body:JSON.stringify({contents:[{role:'user',parts:[normalizedAudio(audioPart)]}],generationConfig:{audioTranscriptionConfig:{languageCodes:[],mode:'VERBATIM'}}})
+    body:JSON.stringify({contents:[{role:'user',parts:[normalizedAudio(audioPart)]}],generationConfig:{audioTranscriptionConfig:{languageCodes:[]}}})
   });
   const data=await response.json().catch(()=>({}));
   if(response.ok&&candidateText(data))return new Response(JSON.stringify(data),{status:200,headers:{'content-type':'application/json'}});
