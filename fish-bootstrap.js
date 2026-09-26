@@ -23,7 +23,35 @@ async function fishText(response,label){
   if(!response.ok)throw new Error(`${label} failed (${response.status}): ${String(message).slice(0,180)}`);
   return raw;
 }
+function normalizeGeminiBody(body){
+  if(!body||typeof body!=='object')return body;
+  if(Array.isArray(body)){for(const item of body)normalizeGeminiBody(item);return body;}
+  if(body.inline_data&&!body.inlineData){body.inlineData=body.inline_data;delete body.inline_data;}
+  if(body.mime_type&&!body.mimeType){body.mimeType=body.mime_type;delete body.mime_type;}
+  for(const value of Object.values(body))normalizeGeminiBody(value);
+  return body;
+}
+async function routedFetch(input,init={}){
+  const url=String(input);
+  if(url==='fish://voice-clone')return fishClone(init.body);
+  if(url.startsWith('https://generativelanguage.googleapis.com/')&&typeof init.body==='string'){
+    try{const parsed=normalizeGeminiBody(JSON.parse(init.body));return nativeFetch(input,{...init,body:JSON.stringify(parsed)});}catch{}
+  }
+  return nativeFetch(input,init);
+}
+async function geminiTranscribe(file,name){
+  if(!process.env.GEMINI_API_KEY)return '';
+  const audio=Buffer.from(await file.arrayBuffer()),mime=file.type||'audio/webm',model=process.env.GEMINI_TRANSCRIBE_MODEL||'gemini-3.8-flash';
+  const response=await nativeFetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
+    method:'POST',signal:AbortSignal.timeout(120000),headers:{'Content-Type':'application/json','x-goog-api-key':process.env.GEMINI_API_KEY},
+    body:JSON.stringify({contents:[{role:'user',parts:[{text:'Transcribe this audio exactly. Return only the spoken words, with no explanation.'},{inlineData:{mimeType:mime,data:audio.toString('base64')}}]}],generationConfig:{temperature:0}})
+  });
+  const data=await response.json().catch(()=>({})),text=data.candidates?.[0]?.content?.parts?.map(part=>part.text||'').join('').trim();
+  if(!response.ok||!text)throw new Error(data.error?.message||`Gemini transcription failed (${response.status}).`);
+  return text;
+}
 async function transcribe(file,name){
+  if(process.env.GEMINI_API_KEY){try{return await geminiTranscribe(file,name);}catch(error){console.warn('Gemini transcription fallback failed:',error.message);}}
   const form=new FormData();form.append('audio',file,name);
   const response=await nativeFetch('https://api.fish.audio/v1/asr',{method:'POST',signal:AbortSignal.timeout(120000),headers:{Authorization:`Bearer ${fishKey}`},body:form});
   const raw=await fishText(response,'Fish Audio transcription');let data={};try{data=JSON.parse(raw);}catch{}
@@ -52,9 +80,10 @@ async function fishClone(form){
 
 if(fishKey){
   process.env.ELEVENLABS_API_KEY='';
+  process.env.GEMINI_TRANSCRIBE_MODEL=process.env.GEMINI_TRANSCRIBE_MODEL||'gemini-3.8-flash';
   process.env.VOICE_CLONE_ENDPOINT='fish://voice-clone';
-  globalThis.fetch=(input,init={})=>String(input)==='fish://voice-clone'?fishClone(init.body):nativeFetch(input,init);
-  console.log('Singer voice provider: Fish Audio');
+  globalThis.fetch=routedFetch;
+  console.log('Singer voice provider: Fish Audio (Gemini transcription preferred)');
 }
 const {createChat}=await import('./server.js');
 const {server}=createChat();
