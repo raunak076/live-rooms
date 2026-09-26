@@ -2,7 +2,8 @@
 // Loaded after app.js so it can reuse authFetch() and the existing preview endpoint.
 (()=>{
   if(typeof previewVoice!=='function'||typeof authFetch!=='function')return;
-  let activeVoice=null,playingAudio=null,playingUrl='',busy=false;
+  let activeVoice=null,playingAudio=null,busy=false,lastVoiceId='';
+  const audioUrls=new Set();
 
   const escapeText=value=>String(value||'').slice(0,160);
   function ensureStudio(){
@@ -22,7 +23,8 @@
     root.querySelector('#voice-studio-text').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();root.querySelector('#voice-studio-form').requestSubmit();}});
     return root;
   }
-  function closeStudio(){const root=document.getElementById('voice-studio');if(root)root.hidden=true;playingAudio?.pause();}
+  function emptyState(){return'<div class="voice-studio-empty"><span>♫</span><strong>Type anything below</strong><small>Hindi, English and Hinglish text can be tested directly without microphone transcription.</small></div>';}
+  function closeStudio(){const root=document.getElementById('voice-studio');if(root){root.hidden=true;root.classList.remove('ready');}playingAudio?.pause();}
   function addBubble(kind,text,{loading=false,audioUrl=''}={}){
     const root=ensureStudio(),list=root.querySelector('#voice-studio-messages');list.querySelector('.voice-studio-empty')?.remove();
     const row=document.createElement('div');row.className='voice-studio-row '+kind;
@@ -37,12 +39,12 @@
     try{
       const response=await authFetch('/api/voices/'+encodeURIComponent(activeVoice.id)+'/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
       if(!response.ok){const result=await response.json().catch(()=>({}));throw new Error(result.error||'Voice generation failed.');}
-      const blob=await response.blob(),url=URL.createObjectURL(blob);if(playingUrl)URL.revokeObjectURL(playingUrl);playingUrl=url;pending.row.remove();addBubble('voice',text,{audioUrl:url});playingAudio?.pause();playingAudio=new Audio(url);await playingAudio.play();
+      const blob=await response.blob(),url=URL.createObjectURL(blob);audioUrls.add(url);pending.row.remove();addBubble('voice',text,{audioUrl:url});playingAudio?.pause();playingAudio=new Audio(url);await playingAudio.play();
     }catch(error){pending.copy.textContent=error.message||'Could not generate this voice.';pending.row.classList.add('error');}
     finally{busy=false;button.disabled=false;root.querySelector('#voice-studio-text').focus();}
   }
   function openStudio(voice){
-    activeVoice=voice;const root=ensureStudio();root.querySelector('#voice-studio-title').textContent=voice.name;root.querySelector('#voice-studio-owner').textContent='@'+voice.owner+' · typed text test';root.hidden=false;requestAnimationFrame(()=>root.classList.add('ready'));root.querySelector('#voice-studio-text').focus();
+    activeVoice=voice;const root=ensureStudio();if(lastVoiceId&&lastVoiceId!==voice.id)root.querySelector('#voice-studio-messages').innerHTML=emptyState();lastVoiceId=voice.id;root.querySelector('#voice-studio-title').textContent=voice.name;root.querySelector('#voice-studio-owner').textContent='@'+voice.owner+' · typed text test';root.hidden=false;requestAnimationFrame(()=>root.classList.add('ready'));root.querySelector('#voice-studio-text').focus();
   }
 
   const originalPreview=previewVoice;
@@ -50,4 +52,5 @@
     if(!voice?.id)return originalPreview(voice,button);
     openStudio(voice);
   };
+  window.addEventListener('pagehide',()=>{for(const url of audioUrls)URL.revokeObjectURL(url);audioUrls.clear();},{once:true});
 })();
