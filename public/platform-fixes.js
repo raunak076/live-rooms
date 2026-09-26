@@ -3,6 +3,10 @@
 
 let callVibrationTimer=null;
 
+if(nativeAndroid)document.body.classList.add('native-android');
+if(!document.querySelector('link[data-voice-studio]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/voice-studio.css?v=1';link.dataset.voiceStudio='1';document.head.append(link);}
+if(!document.querySelector('script[data-voice-studio]')){const script=document.createElement('script');script.src='/voice-studio.js?v=1';script.defer=true;script.dataset.voiceStudio='1';document.head.append(script);}
+
 function sameApplicationServerKey(subscription,publicKey){
   const current=subscription?.options?.applicationServerKey;
   if(!current)return false;
