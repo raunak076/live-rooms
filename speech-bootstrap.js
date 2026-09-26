@@ -1,5 +1,5 @@
-// Speech-accuracy bootstrap. Runs before fish-bootstrap.js and improves voice-note transcription
-// without changing the established voice provider pipeline.
+// Speech-accuracy bootstrap. Runs before the performance-aware voice provider and improves
+// voice-note transcription without changing the established chat flow.
 const baseFetch=globalThis.fetch.bind(globalThis);
 const GEMINI_HOST='https://generativelanguage.googleapis.com/';
 
@@ -41,4 +41,4 @@ globalThis.fetch=async function speechAwareFetch(input,init={}){
   return baseFetch(input,{...init,body:JSON.stringify(body)});
 };
 
-await import('./fish-bootstrap.js');
+await import('./performance-bootstrap.js');
