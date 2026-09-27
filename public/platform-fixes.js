@@ -7,6 +7,27 @@ if(nativeAndroid)document.body.classList.add('native-android');
 if(!document.querySelector('link[data-voice-studio]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/voice-studio.css?v=1';link.dataset.voiceStudio='1';document.head.append(link);}
 if(!document.querySelector('script[data-voice-studio]')){const script=document.createElement('script');script.src='/voice-studio.js?v=1';script.defer=true;script.dataset.voiceStudio='1';document.head.append(script);}
 
+// Reconnects should never sign the user out because a room refresh or socket RPC timed out.
+// /api/sync is authoritative: it only clears the saved session on a real HTTP 401.
+socket.off('connect');
+socket.on('connect',async()=>{
+  $('connection').textContent='● Connected';$('send').disabled=false;
+  if(!token){finishBoot();return;}
+  const active=currentRoom?.id||'';
+  try{
+    await syncSession();
+    if(!token||!user)return;
+    if(!active&&inviteCode){
+      try{const result=await rpc('enter',{roomId:inviteCode});showRoom(result.room);}
+      catch(error){notice(error.message);showLobby({skipAnimation:true});}
+    }
+    if(requestedCallId&&currentRoom?.id)showIncomingCall({roomId:currentRoom.id,callId:requestedCallId});
+  }catch(error){
+    console.warn('Session reconnect retry:',error.message);
+    $('connection').textContent='Reconnecting…';
+  }finally{finishBoot();}
+});
+
 function sameApplicationServerKey(subscription,publicKey){
   const current=subscription?.options?.applicationServerKey;
   if(!current)return false;
