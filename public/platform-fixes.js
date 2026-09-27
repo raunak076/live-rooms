@@ -69,26 +69,22 @@ $('message-form').addEventListener('submit',event=>{
   stopVoiceNote();
 },{capture:true});
 
-// If custom conversion is temporarily unavailable, never lose the recording.
-// Send the user's original voice note instead and explain what happened.
+// A selected custom voice must only send converted audio. If conversion fails,
+// surface the real error and keep the original recording out of the chat.
 uploadClonedVoice=async function(file,modelId){
   if(!currentRoom||uploading||!modelId||!file?.size)return;
   if(file.size>8*1024*1024)throw new Error('Keep the source voice note under 8 MB.');
   const roomId=currentRoom.id;
-  setUploadState(true,'Converting custom voice…');clearNotice();
+  setUploadState(true,'Converting custom singing voice…');clearNotice();
   try{
     const response=await authFetch('/api/voices/'+encodeURIComponent(modelId)+'/clone/'+encodeURIComponent(roomId),{
       method:'POST',headers:{'Content-Type':file.type},body:file
     });
     const result=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(result.error||'Custom voice conversion failed.');
+    if(!response.ok)throw new Error(result.error||'Custom voice conversion failed. Original audio was not sent.');
     if(currentRoom?.id===roomId)renderMessage(result.message);
+  }finally{
     setUploadState(false);
-  }catch(error){
-    setUploadState(false);
-    if(currentRoom?.id!==roomId)throw error;
-    await uploadMedia(file,{voiceEffect:'original'});
-    notice('Custom voice conversion is unavailable right now, so your original voice note was sent instead.');
   }
 };
 
