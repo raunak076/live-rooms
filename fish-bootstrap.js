@@ -4,11 +4,13 @@ import { dirname } from 'node:path';
 
 const nativeFetch=globalThis.fetch.bind(globalThis);
 const elevenKey=process.env.ELEVENLABS_API_KEY||'';
+const falKey=process.env.FAL_KEY||'';
 const performanceVoiceIds=new Map();
 const provisioning=new Map();
 const voiceMapFile=process.env.PERFORMANCE_VOICE_MAP_FILE||'/app/data/performance-voice-map.json';
 let voiceMapLoaded=false;
 
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 function audioType(audio){
   const b=Buffer.from(audio);
   if(b.length>=4&&b.subarray(0,4).toString('ascii')==='RIFF')return['audio/wav','.wav'];
@@ -20,13 +22,27 @@ function audioType(audio){
   return['audio/webm','.webm'];
 }
 function syncSafe(size){return Buffer.from([(size>>21)&127,(size>>14)&127,(size>>7)&127,size&127]);}
+function watermarkText(model){return `Live Chat AI voice clone | model=${model.id} | owner=${model.owner} | generated=${new Date().toISOString()}`;}
 function watermarkMp3(audio,model){
-  const value=Buffer.from(`Live Chat AI voice clone | model=${model.id} | owner=${model.owner} | generated=${new Date().toISOString()}`,'utf8');
+  const value=Buffer.from(watermarkText(model),'utf8');
   const payload=Buffer.concat([Buffer.from([3]),Buffer.from('AI_GENERATED\0','utf8'),value]);
   const frameHeader=Buffer.alloc(10);frameHeader.write('TXXX',0,'ascii');frameHeader.writeUInt32BE(payload.length,4);
   const frame=Buffer.concat([frameHeader,payload]);
   return Buffer.concat([Buffer.from('ID3\x03\x00\x00','binary'),syncSafe(frame.length),frame,Buffer.from(audio)]);
 }
+function watermarkWav(audio,model){
+  const input=Buffer.from(audio);
+  if(input.length<12||input.subarray(0,4).toString('ascii')!=='RIFF'||input.subarray(8,12).toString('ascii')!=='WAVE')return null;
+  const text=Buffer.from(watermarkText(model)+'\0','utf8');
+  const padded=text.length%2?Buffer.concat([text,Buffer.from([0])]):text;
+  const icmt=Buffer.alloc(8);icmt.write('ICMT',0,'ascii');icmt.writeUInt32LE(text.length,4);
+  const infoPayload=Buffer.concat([Buffer.from('INFO','ascii'),icmt,padded]);
+  const list=Buffer.alloc(8);list.write('LIST',0,'ascii');list.writeUInt32LE(infoPayload.length,4);
+  const output=Buffer.concat([input,list,infoPayload]);
+  output.writeUInt32LE(output.length-8,4);
+  return output;
+}
+function dataUri(buffer,mime){return `data:${mime||audioType(buffer)[0]};base64,${Buffer.from(buffer).toString('base64')}`;}
 async function loadVoiceMap(){
   if(voiceMapLoaded)return;voiceMapLoaded=true;
   try{const data=JSON.parse(await readFile(voiceMapFile,'utf8'));for(const [key,id] of Object.entries(data))if(typeof id==='string'&&id)performanceVoiceIds.set(key,id);}catch{}
@@ -38,12 +54,41 @@ async function saveVoiceMap(){
 function providerMessage(data,status){
   const detail=typeof data?.detail==='string'?data.detail:data?.detail?.message||data?.message||data?.error||'';
   if(status===401||status===402||/instant voice cloning|subscription|upgrade your plan|starter plan/i.test(detail)){
-    return 'Custom voice recording now uses audio-to-audio conversion only. The connected ElevenLabs plan does not allow creating this cloned target voice; enable Instant Voice Cloning (Starter or above) or configure PERFORMANCE_VOICE_ENDPOINT. No text-to-speech fallback was used.';
+    return falKey?'Audio-to-audio custom voice conversion failed at the fallback provider.':'Custom voice conversion needs an audio-to-audio provider. Add FAL_KEY for Chatterbox speech-to-speech, or enable ElevenLabs Instant Voice Cloning. No text-to-speech fallback was used.';
   }
   return String(detail||'Audio-to-audio voice provider failed.').slice(0,300);
 }
+async function falVoiceClone({source,mime,model,sample,sampleMime}){
+  const endpoint='fal-ai/chatterbox/speech-to-speech',headers={Authorization:'Key '+falKey,'Content-Type':'application/json'};
+  const body={source_audio_url:dataUri(source,mime),target_voice_audio_url:dataUri(sample,sampleMime||audioType(sample)[0])};
+  const submitted=await nativeFetch('https://queue.fal.run/'+endpoint,{method:'POST',signal:AbortSignal.timeout(45000),headers,body:JSON.stringify(body)});
+  const queue=await submitted.json().catch(()=>({}));
+  if(!submitted.ok||!queue.request_id)throw Object.assign(new Error(providerMessage(queue,submitted.status)),{statusCode:submitted.status===429?429:502});
+  const statusUrl=queue.status_url||`https://queue.fal.run/${endpoint}/requests/${encodeURIComponent(queue.request_id)}/status`;
+  const resultUrl=queue.response_url||`https://queue.fal.run/${endpoint}/requests/${encodeURIComponent(queue.request_id)}`;
+  const deadline=Date.now()+180000;
+  while(Date.now()<deadline){
+    const statusResponse=await nativeFetch(statusUrl,{headers:{Authorization:'Key '+falKey},signal:AbortSignal.timeout(30000)});
+    const status=await statusResponse.json().catch(()=>({}));
+    if(!statusResponse.ok)throw Object.assign(new Error(providerMessage(status,statusResponse.status)),{statusCode:502});
+    if(status.status==='COMPLETED')break;
+    if(['FAILED','CANCELLED'].includes(status.status))throw Object.assign(new Error(providerMessage(status,502)),{statusCode:502});
+    await sleep(1200);
+  }
+  if(Date.now()>=deadline)throw Object.assign(new Error('Audio-to-audio voice conversion timed out.'),{statusCode:504});
+  const resultResponse=await nativeFetch(resultUrl,{headers:{Authorization:'Key '+falKey},signal:AbortSignal.timeout(30000)});
+  const result=await resultResponse.json().catch(()=>({}));
+  if(!resultResponse.ok||!result.audio?.url)throw Object.assign(new Error(providerMessage(result,resultResponse.status)),{statusCode:502});
+  const outputResponse=await nativeFetch(result.audio.url,{signal:AbortSignal.timeout(60000)});
+  if(!outputResponse.ok)throw Object.assign(new Error('Converted audio could not be downloaded.'),{statusCode:502});
+  const output=Buffer.from(await outputResponse.arrayBuffer());if(!output.length)throw Object.assign(new Error('Audio-to-audio converter returned empty audio.'),{statusCode:502});
+  const outputMime=(result.audio.content_type||outputResponse.headers.get('content-type')||audioType(output)[0]).split(';')[0].toLowerCase();
+  if(outputMime==='audio/mpeg'||outputMime==='audio/mp3')return{buffer:watermarkMp3(output,model),mime:'audio/mpeg',watermarked:true};
+  if(outputMime==='audio/wav'||outputMime==='audio/x-wav'){const marked=watermarkWav(output,model);if(!marked)throw Object.assign(new Error('Converted WAV could not be watermarked.'),{statusCode:502});return{buffer:marked,mime:'audio/wav',watermarked:true};}
+  throw Object.assign(new Error('Audio-to-audio provider returned an unsupported format.'),{statusCode:502});
+}
 async function ensurePerformanceVoice(model,sample,sampleMime){
-  if(!elevenKey)throw Object.assign(new Error('Audio-to-audio custom voice conversion is not configured. Add ELEVENLABS_API_KEY or PERFORMANCE_VOICE_ENDPOINT.'),{statusCode:503});
+  if(!elevenKey)throw Object.assign(new Error('Audio-to-audio custom voice conversion is not configured. Add FAL_KEY or ELEVENLABS_API_KEY.'),{statusCode:503});
   await loadVoiceMap();
   const raw=Buffer.from(sample),key=model.id+':'+createHash('sha256').update(raw).digest('hex');
   if(performanceVoiceIds.has(key))return performanceVoiceIds.get(key);
@@ -54,9 +99,7 @@ async function ensurePerformanceVoice(model,sample,sampleMime){
     form.append('description','Consented Live Rooms custom voice owned by @'+model.owner+'. Used for audio-to-audio voice conversion.');
     form.append('remove_background_noise','false');
     form.append('files',new Blob([raw],{type:sampleMime||audioType(raw)[0]}),'sample'+ext);
-    const response=await nativeFetch('https://api.elevenlabs.io/v1/voices/add',{
-      method:'POST',signal:AbortSignal.timeout(120000),headers:{'xi-api-key':elevenKey},body:form
-    });
+    const response=await nativeFetch('https://api.elevenlabs.io/v1/voices/add',{method:'POST',signal:AbortSignal.timeout(120000),headers:{'xi-api-key':elevenKey},body:form});
     const data=await response.json().catch(()=>({}));
     if(!response.ok||!data.voice_id)throw Object.assign(new Error(providerMessage(data,response.status)),{statusCode:response.status===429?429:503});
     performanceVoiceIds.set(key,data.voice_id);await saveVoiceMap();
@@ -70,31 +113,27 @@ async function externalPerformanceClone({source,mime,model,sample,sampleMime}){
   form.append('source',new Blob([source],{type:mime}),'source'+audioType(source)[1]);
   form.append('consented_sample',new Blob([sample],{type:sampleMime||audioType(sample)[0]}),'sample'+audioType(sample)[1]);
   form.append('model_id',model.id);form.append('owner',model.owner);
-  const response=await nativeFetch(process.env.PERFORMANCE_VOICE_ENDPOINT,{
-    method:'POST',signal:AbortSignal.timeout(180000),
-    headers:{...(process.env.PERFORMANCE_VOICE_API_KEY?{Authorization:'Bearer '+process.env.PERFORMANCE_VOICE_API_KEY}:{})},body:form
-  });
+  const response=await nativeFetch(process.env.PERFORMANCE_VOICE_ENDPOINT,{method:'POST',signal:AbortSignal.timeout(180000),headers:{...(process.env.PERFORMANCE_VOICE_API_KEY?{Authorization:'Bearer '+process.env.PERFORMANCE_VOICE_API_KEY}:{})},body:form});
   if(!response.ok)throw Object.assign(new Error('Audio-to-audio custom voice conversion failed.'),{statusCode:response.status===429?429:502});
   const outputMime=response.headers.get('content-type')?.split(';')[0]?.toLowerCase()||'audio/mpeg';
   const output=Buffer.from(await response.arrayBuffer());if(!output.length)throw Object.assign(new Error('Audio-to-audio converter returned empty audio.'),{statusCode:502});
   if(outputMime==='audio/mpeg')return{buffer:watermarkMp3(output,model),mime:'audio/mpeg',watermarked:true};
+  if(outputMime==='audio/wav'||outputMime==='audio/x-wav'){const marked=watermarkWav(output,model);if(marked)return{buffer:marked,mime:'audio/wav',watermarked:true};}
   if(response.headers.get('x-ai-watermarked')!=='true')throw Object.assign(new Error('Audio-to-audio converter did not confirm the required AI watermark.'),{statusCode:502});
   return{buffer:output,mime:outputMime,watermarked:true};
 }
 async function elevenPerformanceClone({source,mime,model,sample,sampleMime}){
   const voiceId=await ensurePerformanceVoice(model,sample,sampleMime),form=new FormData();
   form.append('audio',new Blob([source],{type:mime}),'source'+audioType(source)[1]);
-  form.append('model_id','eleven_multilingual_sts_v2');
-  form.append('remove_background_noise','false');
-  const response=await nativeFetch('https://api.elevenlabs.io/v1/speech-to-speech/'+encodeURIComponent(voiceId)+'?output_format=mp3_44100_128',{
-    method:'POST',signal:AbortSignal.timeout(180000),headers:{'xi-api-key':elevenKey},body:form
-  });
+  form.append('model_id','eleven_multilingual_sts_v2');form.append('remove_background_noise','false');
+  const response=await nativeFetch('https://api.elevenlabs.io/v1/speech-to-speech/'+encodeURIComponent(voiceId)+'?output_format=mp3_44100_128',{method:'POST',signal:AbortSignal.timeout(180000),headers:{'xi-api-key':elevenKey},body:form});
   if(!response.ok){const data=await response.json().catch(()=>({}));throw Object.assign(new Error(providerMessage(data,response.status)),{statusCode:response.status===429?429:502});}
   const audio=Buffer.from(await response.arrayBuffer());if(!audio.length)throw Object.assign(new Error('Audio-to-audio converter returned empty audio.'),{statusCode:502});
   return{buffer:watermarkMp3(audio,model),mime:'audio/mpeg',watermarked:true};
 }
 async function audioToAudioVoiceClone(args){
-  console.log('Custom voice mode: strict audio-to-audio (pitch/timing performance preserved; no transcription/TTS path)');
+  console.log('Custom voice mode: strict audio-to-audio (no transcription/TTS path)');
+  if(falKey){console.log('Custom voice provider: Chatterbox speech-to-speech');return falVoiceClone(args);}
   if(process.env.PERFORMANCE_VOICE_ENDPOINT)return externalPerformanceClone(args);
   return elevenPerformanceClone(args);
 }
