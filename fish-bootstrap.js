@@ -39,25 +39,39 @@ function watermarkWav(audio,model){
 }
 function hfHeaders(extra={}){return{...extra,...(hfToken?{Authorization:'Bearer '+hfToken}:{})};}
 function delay(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+function quotaError(){
+  const error=new Error(hfToken?'Free Seed-VC GPU quota is temporarily exhausted. Try again after the Hugging Face quota resets.':'Free Seed-VC anonymous GPU quota is exhausted. Add a free Hugging Face read token as HF_TOKEN to use the larger free-account quota.');
+  error.statusCode=429;return error;
+}
 async function fetchRetry(url,options={},attempts=3){
   let lastError;
   for(let attempt=0;attempt<attempts;attempt++){
     try{
       const response=await nativeFetch(url,options);
+      if(response.status===429)throw quotaError();
       if(response.ok||![502,503,504].includes(response.status))return response;
       lastError=new Error('Seed-VC service is waking up.');
-    }catch(error){lastError=error;}
+    }catch(error){
+      if(error?.statusCode===429)throw error;
+      lastError=error;
+    }
     if(attempt<attempts-1)await delay(2500*(attempt+1));
   }
   throw lastError||new Error('Seed-VC service is unavailable.');
 }
-async function normalizeWav(buffer){
-  const raw=Buffer.from(buffer),[mime,ext]=audioType(raw);if(mime==='audio/wav')return raw;
+async function normalizeWav(buffer,{reference=false}={}){
+  const raw=Buffer.from(buffer),[mime,ext]=audioType(raw);
   const dir=await mkdtemp(join(tmpdir(),'live-rooms-vc-')),input=join(dir,'input'+ext),output=join(dir,'output.wav');
   try{
     await writeFile(input,raw);
+    const args=['-y','-hide_banner','-loglevel','error','-i',input,'-vn','-ac','1','-ar','44100'];
+    if(reference){
+      // A clean, levelled reference improves zero-shot timbre similarity without changing pitch.
+      args.push('-af','silenceremove=start_periods=1:start_duration=0.08:start_threshold=-48dB:stop_periods=1:stop_duration=0.15:stop_threshold=-48dB,loudnorm=I=-18:TP=-1.5:LRA=11');
+    }
+    args.push(output);
     await new Promise((resolve,reject)=>{
-      const process=spawn('ffmpeg',['-y','-hide_banner','-loglevel','error','-i',input,'-vn','-ac','1','-ar','44100',output]);let stderr='';
+      const process=spawn('ffmpeg',args);let stderr='';
       process.stderr.on('data',chunk=>stderr+=chunk.toString());process.on('error',reject);process.on('close',code=>code===0?resolve():reject(new Error(('Audio conversion failed. '+stderr).trim().slice(0,240))));
     });
     return await readFile(output);
@@ -91,14 +105,17 @@ async function getSingingEndpoint(){
   return singingEndpoint;
 }
 function parseSse(text){
-  let complete=null,errorText='';
+  let complete=null,errorSeen=false,errorText='';
   for(const block of text.split(/\r?\n\r?\n/)){
     const lines=block.split(/\r?\n/),event=lines.find(line=>line.startsWith('event:'))?.slice(6).trim(),dataText=lines.filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trim()).join('\n');
-    if(!dataText)continue;
-    if(event==='complete'){try{complete=JSON.parse(dataText);}catch{complete=dataText;}}
-    if(event==='error')errorText=dataText&&dataText!=='null'?dataText:'Seed-VC rejected the singing conversion request.';
+    if(event==='complete'&&dataText){try{complete=JSON.parse(dataText);}catch{complete=dataText;}}
+    if(event==='error'){errorSeen=true;errorText=dataText&&dataText!=='null'?dataText:'';}
   }
-  if(errorText)throw new Error(('Free Seed-VC error: '+errorText).slice(0,300));
+  if(errorSeen){
+    if(!errorText)throw quotaError();
+    if(/quota|zero.?gpu|rate.?limit|too many|gpu.*limit/i.test(errorText))throw quotaError();
+    throw new Error(('Free Seed-VC error: '+errorText).slice(0,300));
+  }
   if(complete===null)throw new Error('Free Seed-VC returned no completed audio.');
   return complete;
 }
@@ -115,23 +132,25 @@ function collectAudioUrls(value,urls=[]){
 }
 async function callSeedVc(sourceFile,targetFile){
   const endpoint=await getSingingEndpoint();
-  // V1 singing conversion inputs: source, reference, steps, length, CFG, F0=true,
-  // auto-F0=false (preserve source melody/key), pitch shift=0.
-  const data=[sourceFile,targetFile,30,1.0,0.7,true,false,0];
+  // Higher-quality V1 singing conversion. F0 follows the source melody; target only supplies timbre.
+  // Seed-VC recommends 30-50 diffusion steps for singing; 45 is a quality-focused middle ground.
+  const data=[sourceFile,targetFile,45,1.0,0.7,true,false,0];
   const response=await fetchRetry(hfSpace+'/gradio_api/call/'+encodeURIComponent(endpoint),{method:'POST',signal:AbortSignal.timeout(60000),headers:hfHeaders({'Content-Type':'application/json'}),body:JSON.stringify({data})},2);
   const submitted=await response.json().catch(()=>({}));
   if(!response.ok||!submitted.event_id){
     const detail=submitted?.detail||submitted?.error||`HTTP ${response.status}`;
+    if(response.status===429||/quota|zero.?gpu|rate.?limit|too many/i.test(String(detail)))throw quotaError();
     throw new Error(('Free Seed-VC request could not start: '+String(detail)).slice(0,300));
   }
   const resultResponse=await nativeFetch(hfSpace+'/gradio_api/call/'+encodeURIComponent(endpoint)+'/'+encodeURIComponent(submitted.event_id),{signal:AbortSignal.timeout(300000),headers:hfHeaders({'Accept':'text/event-stream'})});
   const resultText=await resultResponse.text();
+  if(resultResponse.status===429)throw quotaError();
   if(!resultResponse.ok)throw new Error(('Free Seed-VC request failed: HTTP '+resultResponse.status).slice(0,300));
   return parseSse(resultText);
 }
 async function freeSeedVoiceClone({source,model,sample}){
-  console.log('Custom voice provider: Seed-VC V1 F0 singing conversion (free audio-to-audio)');
-  const [sourceWav,targetWav]=await Promise.all([normalizeWav(source),normalizeWav(sample)]);
+  console.log('Custom voice provider: Seed-VC V1 F0 singing conversion (free audio-to-audio); auth=',hfToken?'free HF account':'anonymous');
+  const [sourceWav,targetWav]=await Promise.all([normalizeWav(source),normalizeWav(sample,{reference:true})]);
   const [sourceFile,targetFile]=await Promise.all([uploadGradio(sourceWav,'source.wav'),uploadGradio(targetWav,'reference.wav')]);
   const result=await callSeedVc(sourceFile,targetFile);
   const urls=collectAudioUrls(result),url=urls.at(-1);if(!url)throw new Error('Free Seed-VC returned no downloadable audio.');
