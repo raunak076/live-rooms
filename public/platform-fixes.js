@@ -28,6 +28,70 @@ socket.on('connect',async()=>{
   }finally{finishBoot();}
 });
 
+// Voice recording reliability: both the red stop control and the normal Send button
+// stop the recorder. MediaRecorder.onstop in app.js then finalizes and uploads the blob.
+const recordingStyle=document.createElement('style');
+recordingStyle.textContent=`
+  #attachment-button.recording,#record-audio.recording{
+    background:#d93025!important;color:#fff!important;border-color:#d93025!important;
+    box-shadow:0 0 0 3px rgba(217,48,37,.16)!important;
+    animation:lr-record-pulse 1.15s ease-in-out infinite;
+  }
+  body.voice-recording #send{opacity:1!important;pointer-events:auto!important;}
+  @keyframes lr-record-pulse{50%{transform:scale(.94);box-shadow:0 0 0 7px rgba(217,48,37,.08)}}
+`;
+document.head.append(recordingStyle);
+
+const baseStartVoiceNote=startVoiceNote;
+startVoiceNote=async function(...args){
+  await baseStartVoiceNote(...args);
+  if(mediaRecorder?.state==='recording'){
+    document.body.classList.add('voice-recording');
+    $('attachment-button').setAttribute('aria-label','Stop and send voice note');
+    $('attachment-button').title='Stop & send';
+    $('send').disabled=false;
+    const activeRecorder=mediaRecorder;
+    activeRecorder.addEventListener('stop',()=>{
+      document.body.classList.remove('voice-recording');
+      $('attachment-button').setAttribute('aria-label','Add attachment');
+      $('attachment-button').removeAttribute('title');
+      if(socket.connected&&!uploading)$('send').disabled=false;
+    },{once:true});
+  }
+};
+
+// Capture submit before the normal text-message submit handler. While recording,
+// Send means "stop and send this voice note" even when the textarea is empty.
+$('message-form').addEventListener('submit',event=>{
+  if(mediaRecorder?.state!=='recording')return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  stopVoiceNote();
+},{capture:true});
+
+// If custom conversion is temporarily unavailable, never lose the recording.
+// Send the user's original voice note instead and explain what happened.
+uploadClonedVoice=async function(file,modelId){
+  if(!currentRoom||uploading||!modelId||!file?.size)return;
+  if(file.size>8*1024*1024)throw new Error('Keep the source voice note under 8 MB.');
+  const roomId=currentRoom.id;
+  setUploadState(true,'Converting custom voice…');clearNotice();
+  try{
+    const response=await authFetch('/api/voices/'+encodeURIComponent(modelId)+'/clone/'+encodeURIComponent(roomId),{
+      method:'POST',headers:{'Content-Type':file.type},body:file
+    });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(result.error||'Custom voice conversion failed.');
+    if(currentRoom?.id===roomId)renderMessage(result.message);
+    setUploadState(false);
+  }catch(error){
+    setUploadState(false);
+    if(currentRoom?.id!==roomId)throw error;
+    await uploadMedia(file,{voiceEffect:'original'});
+    notice('Custom voice conversion is unavailable right now, so your original voice note was sent instead.');
+  }
+};
+
 function sameApplicationServerKey(subscription,publicKey){
   const current=subscription?.options?.applicationServerKey;
   if(!current)return false;
