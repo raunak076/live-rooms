@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Live Chat",
-  "short_name": "Live Chat",
+  "name": "Live Rooms",
+  "short_name": "Live Rooms",
   "description": "Realtime rooms, private chat, voice calls, photos and voice notes.",
   "lang": "en",
   "start_url": "/",
@@ -9,11 +9,12 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#f3f6f5",
-  "theme_color": "#075e54",
+  "background_color": "#081c18",
+  "theme_color": "#0a8d70",
   "categories": ["social", "communication"],
   "prefer_related_applications": false,
   "icons": [
+    {"src":"/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"},
     {"src":"/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
     {"src":"/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
   ]
