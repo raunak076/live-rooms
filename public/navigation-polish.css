@@ -3,16 +3,36 @@
 #lobby,#calls-view,#profile-view,#chat{backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translate3d(0,0,0)}
 #chat{contain:layout style!important}
 .page-turn-forward,.page-turn-back,.tab-swipe-in{animation:none!important}
-.chat-enter{animation:lr-chat-in .18s cubic-bezier(.2,.75,.25,1) both!important}
-.chat-exit{animation:lr-chat-out .16s cubic-bezier(.4,0,.8,.2) both!important}
-.bottom-nav::before{transition:transform .16s cubic-bezier(.2,.75,.25,1)!important}
-@keyframes lr-chat-in{from{opacity:.78;transform:translate3d(-14px,0,0)}to{opacity:1;transform:translate3d(0,0,0)}}
-@keyframes lr-chat-out{from{opacity:1;transform:translate3d(0,0,0)}to{opacity:.8;transform:translate3d(12px,0,0)}}
+.chat-enter{animation:lr-chat-in .22s cubic-bezier(.22,.61,.36,1) both!important}
+.chat-exit{animation:lr-chat-out .2s cubic-bezier(.4,0,.2,1) both!important}
+.bottom-nav::before{transition:transform .24s cubic-bezier(.22,.61,.36,1)!important}
+.tab-drag-surface{will-change:transform!important;backface-visibility:hidden!important;-webkit-backface-visibility:hidden!important}
+.tab-drag-current,.tab-drag-target{transition:none!important}
+@keyframes lr-chat-in{from{opacity:.9;transform:translate3d(-20px,0,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@keyframes lr-chat-out{from{opacity:1;transform:translate3d(0,0,0)}to{opacity:.9;transform:translate3d(16px,0,0)}}
 .native-android body,.native-android .shell,.native-android main{background:var(--surface,#0b141a)!important}
 .native-android .attachment-menu,.native-android .popup-menu,.native-android .action-sheet,.native-android .theme-sheet{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 .native-android #messages{contain:none!important;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
 .native-android .message,.native-android .bubble{will-change:auto!important}
 .native-android .conversation-list-card,.native-android .profile-card,.native-android .call-screen{transform:none}
-.native-android .boot-logo{animation-duration:2.2s}
+.native-android .boot-logo{animation-duration:2s}
+
+/* Call actions: receiver sees an obvious green Answer and red Decline. */
+#active-call.incoming #answer-call{background:#20b86a!important;color:#fff!important;box-shadow:0 8px 22px #20b86a42!important}
+#active-call.incoming #end-call{background:#e64d50!important;color:#fff!important;box-shadow:0 8px 22px #e64d5042!important}
+#active-call.incoming #answer-call:active,#active-call.incoming #end-call:active{transform:scale(.94)!important}
+#answer-call .call-control-icon,#end-call .call-control-icon{color:inherit!important}
+
+/* Message send motion: bubble grows from composer without a heavy fly-across effect. */
+.message.message-pop{animation:lr-message-grow .24s cubic-bezier(.18,.82,.25,1.08) both!important;transform-origin:bottom right}
+.message:not(.own).message-pop{transform-origin:bottom left}
+.send-flight{padding:6px 10px!important;border-radius:16px!important;background:color-mix(in srgb,var(--accent) 86%,#fff 14%)!important;color:#fff!important;box-shadow:0 10px 26px #0003!important;font-size:13px!important;font-weight:650!important;transform-origin:center!important}
+@keyframes lr-message-grow{0%{opacity:.25;transform:translateY(10px) scale(.93)}70%{opacity:1;transform:translateY(-1px) scale(1.01)}100%{opacity:1;transform:none}}
+
+/* Opening mark: same visual language as the new launcher icon, GPU-only animation. */
+.boot-screen{background:radial-gradient(circle at 50% 35%,#0f5949 0,#082c25 38%,#061713 76%)!important}
+.boot-screen strong{font-size:27px!important;font-weight:780!important;letter-spacing:-.7px!important}
+.boot-screen small{font-size:13px!important;letter-spacing:.01em!important;color:#b9d9d0!important}
+
 @media(max-width:760px){#lobby,#calls-view,#profile-view{scrollbar-width:none}#lobby::-webkit-scrollbar,#calls-view::-webkit-scrollbar,#profile-view::-webkit-scrollbar{display:none}}
-@media(prefers-reduced-motion:reduce){.chat-enter,.chat-exit{animation:none!important}.bottom-nav::before{transition:none!important}}
+@media(prefers-reduced-motion:reduce){.chat-enter,.chat-exit,.message.message-pop{animation:none!important}.bottom-nav::before{transition:none!important}}
