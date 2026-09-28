@@ -70,7 +70,9 @@ public class NotificationService extends Service {
         getSystemService(NotificationManager.class).notify(notificationId,n);
     }
     private void showCall(JSONObject data){
-        String roomId=data.optString("roomId"),callId=data.optString("callId"),caller=data.optString("by","Someone");if(!roomId.matches("[a-f0-9]{24}")||!callId.matches("[a-f0-9-]{20,64}"))return;
+        String roomId=data.optString("roomId"),callId=data.optString("callId"),caller=data.optString("by","Someone");
+        if(username.equals(caller))return;
+        if(!roomId.matches("[a-f0-9]{24}")||!callId.matches("[a-f0-9-]{20,64}"))return;
         int id=callId.hashCode();
         PendingIntent open=openIntent(roomId,callId,id);
         PendingIntent answer=openIntent(roomId,callId,id+11);
