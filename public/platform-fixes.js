@@ -169,3 +169,6 @@ navigator.serviceWorker?.addEventListener('message',event=>{
     showIncomingCall(payload);
   }
 });
+
+// Load the small production polish layer after all base globals above are ready.
+if(!document.querySelector('script[data-production-polish]')){const script=document.createElement('script');script.src='/production-polish.js?v=1';script.defer=true;script.dataset.productionPolish='1';document.head.append(script);}
