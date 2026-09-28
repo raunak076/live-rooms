@@ -21,11 +21,38 @@
       if(!target||!animate||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
       target.getAnimations().forEach(animation=>{if(animation.id==='lr-tab-polish')animation.cancel();});
       tabAnimation=target.animate([
-        {opacity:.76,transform:`translate3d(${direction*14}px,0,0)`},
+        {opacity:.94,transform:`translate3d(${direction*22}px,0,0)`},
         {opacity:1,transform:'translate3d(0,0,0)'}
-      ],{duration:165,easing:'cubic-bezier(.2,.75,.25,1)',fill:'both'});
+      ],{duration:220,easing:'cubic-bezier(.22,.61,.36,1)',fill:'both'});
       tabAnimation.id='lr-tab-polish';
       tabAnimation.finished.catch(()=>{}).finally(()=>{if(tabAnimation){target.style.opacity='';target.style.transform='';tabAnimation=null;}});
+    };
+  }
+
+  // Never treat a call created by this same signed-in user as an incoming call.
+  // This protects the WebView side when multiple sockets exist for the Android wrapper.
+  if(typeof showIncomingCall==='function'){
+    const baseShowIncomingCall=showIncomingCall;
+    showIncomingCall=function safeIncomingCall(payload){if(payload?.by&&payload.by===user)return;baseShowIncomingCall(payload);};
+  }
+
+  // Smoother text send motion: short lift from composer + gentle target grow.
+  if(typeof animateSendFlight==='function'){
+    animateSendFlight=function polishedSendFlight(id,text){
+      const target=document.querySelector('#'+CSS.escape('msg-'+id)+' .bubble'),source=document.getElementById('message-form');
+      if(!target||!source||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+      const from=source.getBoundingClientRect(),to=target.getBoundingClientRect(),ghost=document.createElement('span');
+      ghost.className='send-flight';ghost.textContent=text.trim().slice(0,42);
+      const startX=from.left+Math.min(from.width*.58,from.width-80),startY=from.top+8;
+      const endX=to.left+Math.min(to.width*.5,72),endY=to.top+Math.min(to.height*.45,24);
+      ghost.style.left=startX+'px';ghost.style.top=startY+'px';document.body.append(ghost);
+      const dx=endX-startX,dy=endY-startY;
+      ghost.animate([
+        {opacity:0,transform:'translate3d(0,8px,0) scale(.78)'},
+        {opacity:.82,transform:`translate3d(${dx*.42}px,${dy*.36-5}px,0) scale(.94)`,offset:.48},
+        {opacity:0,transform:`translate3d(${dx}px,${dy}px,0) scale(.82)`}
+      ],{duration:320,easing:'cubic-bezier(.2,.72,.24,1)',fill:'forwards'}).finished.finally(()=>ghost.remove());
+      target.animate([{transform:'scale(.97)'},{transform:'scale(1.012)',offset:.65},{transform:'scale(1)'}],{duration:260,easing:'cubic-bezier(.18,.82,.25,1.08)'}).finished.catch(()=>{});
     };
   }
 
