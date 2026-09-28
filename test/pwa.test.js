@@ -33,7 +33,7 @@ test('Android download, background push and call alert regression guards',()=>{
   assert.match(sw,/vibrate:isCall/);
   assert.match(sw,/platform-fixes\.js\?v=stable-1/);
   assert.match(sw,/experience\.css\?v=experience-7/);
-  assert.match(sw,/live-chat-shell-v17/);
+  assert.match(sw,/live-chat-shell-v19/);
   assert.match(sw,/whatsapp\.css\?v=android-call-5/);
   assert.match(index,/id="theme-picker"/);
   assert.match(index,/id="chat-bg-color"/);
