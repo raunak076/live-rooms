@@ -11,12 +11,24 @@ if(!document.querySelector('script[data-voice-studio]')){const script=document.c
 // /api/sync is authoritative: it only clears the saved session on a real HTTP 401.
 socket.off('connect');
 socket.on('connect',async()=>{
-  $('connection').textContent='● Connected';$('send').disabled=false;
-  if(!token){finishBoot();return;}
+  $('connection').textContent='Restoring your chats…';$('send').disabled=true;
+  if(!token){$('connection').textContent='● Connected';finishBoot();return;}
   const active=currentRoom?.id||'';
   try{
     await syncSession();
-    if(!token||!user)return;
+    if(!token)return;
+    if(!user){
+      // A temporary HTTP failure must keep the splash visible, not expose the
+      // sign-in form while a saved session is still being checked.
+      setTimeout(()=>{if(token&&socket.connected&&!user){socket.disconnect();socket.connect();}},3000);
+      return;
+    }
+    // HTTP restores the view, but each new Socket.IO connection must join the
+    // user's rooms before any chat, call, or message RPC is sent.
+    await rpc('auth',{token});
+    $('connection').textContent='● Connected';
+    $('send').disabled=Boolean(currentRoom?.blockedByMe||currentRoom?.blockedMe);
+    setTimeout(()=>{if(user&&socket.connected)loadCallLogs({silent:true});},200);
     if(!active&&inviteCode){
       try{const result=await rpc('enter',{roomId:inviteCode});showRoom(result.room);}
       catch(error){notice(error.message);showLobby({skipAnimation:true});}
@@ -25,7 +37,8 @@ socket.on('connect',async()=>{
   }catch(error){
     console.warn('Session reconnect retry:',error.message);
     $('connection').textContent='Reconnecting…';
-  }finally{finishBoot();}
+    if(token&&socket.connected)setTimeout(()=>{if(token&&socket.connected)rpc('auth',{token}).then(()=>{$('connection').textContent='● Connected';$('send').disabled=Boolean(currentRoom?.blockedByMe||currentRoom?.blockedMe);}).catch(()=>{});},2000);
+  }finally{if(user||!token)finishBoot();}
 });
 
 // Voice recording reliability: both the red stop control and the normal Send button
