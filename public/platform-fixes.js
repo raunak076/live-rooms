@@ -84,14 +84,14 @@ $('message-form').addEventListener('submit',event=>{
 
 // A selected custom voice must only send converted audio. If conversion fails,
 // surface the real error and keep the original recording out of the chat.
-uploadClonedVoice=async function(file,modelId){
+uploadClonedVoice=async function(file,modelId,mode='sur-taal'){
   if(!currentRoom||uploading||!modelId||!file?.size)return;
   if(file.size>8*1024*1024)throw new Error('Keep the source voice note under 8 MB.');
   const roomId=currentRoom.id;
-  setUploadState(true,'Converting custom singing voice…');clearNotice();
+  setUploadState(true,mode==='realistic'?'Creating realistic voice…':'Converting Sur/Taal singing…');clearNotice();
   try{
     const response=await authFetch('/api/voices/'+encodeURIComponent(modelId)+'/clone/'+encodeURIComponent(roomId),{
-      method:'POST',headers:{'Content-Type':file.type},body:file
+      method:'POST',headers:{'Content-Type':file.type,'X-Voice-Mode':mode},body:file
     });
     const result=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(result.error||'Custom voice conversion failed. Original audio was not sent.');
