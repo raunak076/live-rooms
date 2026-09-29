@@ -65,7 +65,14 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
   const get=(q,...args)=>db.prepare(q).get(...args);
   const run=(q,...args)=>db.prepare(q).run(...args);
   const hashToken=t=>createHash('sha256').update(t).digest('hex');
-  const sessionUser=req=>{const token=req.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];return token?get('SELECT username FROM sessions WHERE token=? AND expires>?',hashToken(token),Date.now())?.username:null;};
+  const sessionLifetime=30*86400000;
+  function validSession(token){
+    const now=Date.now(),hashed=hashToken(token);
+    const session=get('SELECT username,expires FROM sessions WHERE token=? AND expires>?',hashed,now);
+    if(session&&session.expires<now+7*86400000)run('UPDATE sessions SET expires=? WHERE token=?',now+sessionLifetime,hashed);
+    return session?.username||null;
+  }
+  const sessionUser=req=>{const token=req.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];return token?validSession(token):null;};
   let vapid=get('SELECT value FROM settings WHERE key=?','vapid');
   if(!vapid){vapid={value:JSON.stringify(webpush.generateVAPIDKeys())};run('INSERT INTO settings VALUES (?,?)','vapid',vapid.value);}
   const vapidKeys=JSON.parse(vapid.value);
@@ -255,7 +262,7 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
       authPending=true;
       try{
         let user,token;
-        if(typeof p.token==='string'&&p.token.length===64){user=get('SELECT username FROM sessions WHERE token=? AND expires>?',hashToken(p.token),Date.now())?.username;token=p.token;}
+        if(typeof p.token==='string'&&/^[a-f0-9]{64}$/.test(p.token)){user=validSession(p.token);token=p.token;}
         else{
           const username=typeof p.username==='string'?p.username.toLowerCase().trim():'';
           if(!/^[a-z0-9_]{3,24}$/.test(username)||['gemini','system'].includes(username))return ack({error:'Use 3–24 letters, numbers or underscores. This username may be reserved.'});
@@ -266,7 +273,7 @@ export function createChat({generate=askGemini,dbPath='data/chat.db',pushNotific
             const salt=randomBytes(16).toString('hex'),hash=await scrypt(p.password,salt,64);
             const accountType=p.accountType==='singer'?'singer':'normal';run('INSERT INTO users(username,salt,hash,display_name,account_type) VALUES (?,?,?,?,?)',username,salt,hash.toString('hex'),username,accountType);user=username;
           }else if(existing){const hash=await scrypt(p.password,existing.salt,64);if(timingSafeEqual(hash,Buffer.from(existing.hash,'hex')))user=username;}
-          if(user){token=randomBytes(32).toString('hex');run('INSERT INTO sessions VALUES (?,?,?)',hashToken(token),user,Date.now()+7*86400000);}
+          if(user){token=randomBytes(32).toString('hex');run('INSERT INTO sessions VALUES (?,?,?)',hashToken(token),user,Date.now()+sessionLifetime);}
         }
         if(!user)return ack({error:'Invalid credentials or expired session.'});
         authenticate(socket,user);ack({user,token,chats:list(user),profile:profile(user)});

@@ -6,6 +6,7 @@ import { createChat,askGemini } from '../server.js';
 import { mkdtempSync,rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 const rpc=(s,event,payload)=>new Promise((resolve,reject)=>s.timeout(2000).emit(event,payload,(e,r)=>e?reject(e):resolve(r)));
 async function connect(port){const s=client('http://localhost:'+port,{transports:['websocket'],forceNew:true});await once(s,'connect');return s;}
 
@@ -18,6 +19,18 @@ test('real-time delivery, DM isolation, ownership, deduplication, AI routing and
     const alice=await connect(port),bob=await connect(port),eve=await connect(port);sockets.push(alice,bob,eve);
     assert.match((await rpc(eve,'enter',{roomName:'Denied'})).error,/sign in/);
     const a=await rpc(alice,'auth',{username:'alice',password:'strong-password',register:true,accountType:'singer'});assert.equal(a.user,'alice');assert.equal(a.profile.accountType,'singer');
+    const dbCheck=new DatabaseSync(dbPath);
+    const hashedToken=(await import('node:crypto')).createHash('sha256').update(a.token).digest('hex');
+    assert.ok(dbCheck.prepare('SELECT expires FROM sessions WHERE token=?').get(hashedToken).expires>Date.now()+29*86400000);
+    dbCheck.prepare('UPDATE sessions SET expires=? WHERE token=?').run(Date.now()+86400000,hashedToken);
+    const resumedSocket=await connect(port);sockets.push(resumedSocket);
+    const syncResponse=await fetch('http://localhost:'+port+'/api/sync',{headers:{Authorization:'Bearer '+a.token}});
+    assert.equal(syncResponse.status,200);
+    assert.equal((await syncResponse.json()).user,'alice');
+    assert.ok(dbCheck.prepare('SELECT expires FROM sessions WHERE token=?').get(hashedToken).expires>Date.now()+29*86400000);
+    assert.equal((await rpc(resumedSocket,'auth',{token:a.token})).user,'alice');
+    assert.match((await rpc(resumedSocket,'enter',{roomName:'Restored room'})).room.name,/Restored room/);
+    dbCheck.close();
     const b=await rpc(bob,'auth',{username:'bob',password:'strong-password',register:true});const e=await rpc(eve,'auth',{username:'eve',password:'strong-password',register:true});
     const {room}=await rpc(alice,'enter',{roomName:'Engineering'});await rpc(bob,'enter',{roomId:room.id});
     const keyResponse=await fetch('http://localhost:'+port+'/api/push/public-key');assert.equal(keyResponse.status,200);assert.ok((await keyResponse.json()).publicKey);

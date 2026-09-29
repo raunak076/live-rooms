@@ -36,3 +36,9 @@
 
 @media(max-width:760px){#lobby,#calls-view,#profile-view{scrollbar-width:none}#lobby::-webkit-scrollbar,#calls-view::-webkit-scrollbar,#profile-view::-webkit-scrollbar{display:none}}
 @media(prefers-reduced-motion:reduce){.chat-enter,.chat-exit,.message.message-pop{animation:none!important}.bottom-nav::before{transition:none!important}}
+
+/* Keep the current screen stable while a room or sign-in request completes. */
+.chat-entry.is-loading,#chat-list button.is-loading,.auth-actions button.is-loading{position:relative;padding-right:38px!important}
+.chat-entry.is-loading::after,#chat-list button.is-loading::after,.auth-actions button.is-loading::after{content:"";position:absolute;right:13px;top:50%;width:14px;height:14px;margin-top:-8px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:lr-request-spin .7s linear infinite;pointer-events:none}
+@keyframes lr-request-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.chat-entry.is-loading::after,#chat-list button.is-loading::after,.auth-actions button.is-loading::after{animation:none;border-right-color:currentColor;opacity:.5}}
