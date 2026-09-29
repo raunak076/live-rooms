@@ -19,6 +19,10 @@ test('old Fish TTS handles realistic speech and preview; singing never falls bac
     if(url==='https://api.fish.audio/v1/asr'){external.push('asr');return Response.json({text:'Hello world'});}
     if(url==='https://api.fish.audio/v1/tts'){
       external.push('tts');assert.equal(options.headers['Content-Type'],'application/msgpack');assert.ok(options.body.length);
+      const bitrateKey=Buffer.concat([Buffer.from([0xab]),Buffer.from('mp3_bitrate')]);
+      const bitrateAt=options.body.indexOf(bitrateKey);
+      assert.notEqual(bitrateAt,-1);
+      assert.deepEqual(options.body.subarray(bitrateAt+bitrateKey.length,bitrateAt+bitrateKey.length+2),Buffer.from([0xcc,128]));
       return new Response(Buffer.from('ID3\x03\0\0sample','binary'),{status:200,headers:{'Content-Type':'audio/mpeg'}});
     }
     return originalFetch(input,options);
