@@ -53,7 +53,7 @@ test('old Fish TTS handles realistic speech and preview; singing never falls bac
   }
 });
 
-test('realistic send retries supported Gemini audio model before depleted Fish ASR',async()=>{
+test('realistic send uses another audio-capable Gemini model before depleted Fish ASR',async()=>{
   const folder=mkdtempSync(join(tmpdir(),'live-gemini-'));
   const originalFetch=globalThis.fetch,previous={fish:process.env.FISH_AUDIO_API_KEY,gemini:process.env.GEMINI_API_KEY,model:process.env.GEMINI_TRANSCRIBE_MODEL};
   const models=[];let fishAsr=0,socket,chat;
@@ -81,10 +81,45 @@ test('realistic send retries supported Gemini audio model before depleted Fish A
     assert.equal(enrolled.status,201);const voice=(await enrolled.json()).voice;
     const result=await originalFetch(base+'/api/voices/'+voice.id+'/clone/'+room.id,{method:'POST',headers:{...headers,'X-Voice-Mode':'realistic'},body:Buffer.from([26,69,223,163])});
     assert.equal(result.status,201);assert.equal((await result.json()).message.attachment.voiceClone.mode,'realistic');
-    assert.deepEqual(models,['gemini-2.5-flash','gemini-3.8-flash','gemini-2.5-flash','gemini-3.8-flash']);assert.equal(fishAsr,0);
+    assert.deepEqual(models,['gemini-2.5-flash','gemini-3.1-flash-lite','gemini-2.5-flash','gemini-3.1-flash-lite']);assert.equal(fishAsr,0);
   }finally{
     socket?.disconnect();if(chat)await new Promise(resolve=>chat.io.close(resolve));globalThis.fetch=originalFetch;
     for(const [key,value] of [['FISH_AUDIO_API_KEY',previous.fish],['GEMINI_API_KEY',previous.gemini],['GEMINI_TRANSCRIBE_MODEL',previous.model]])if(value===undefined)delete process.env[key];else process.env[key]=value;
+    rmSync(folder,{recursive:true,force:true});
+  }
+});
+
+test('realistic send survives Gemini 503 and depleted Fish ASR using ElevenLabs transcription',async()=>{
+  const folder=mkdtempSync(join(tmpdir(),'live-asr-fallback-'));
+  const originalFetch=globalThis.fetch,previous={fish:process.env.FISH_AUDIO_API_KEY,gemini:process.env.GEMINI_API_KEY,eleven:process.env.ELEVENLABS_API_KEY,model:process.env.GEMINI_TRANSCRIBE_MODEL};
+  const calls=[];let socket,chat;
+  process.env.FISH_AUDIO_API_KEY='test-fish';process.env.GEMINI_API_KEY='test-gemini';process.env.ELEVENLABS_API_KEY='test-eleven';process.env.GEMINI_TRANSCRIBE_MODEL='gemini-3.8-flash';
+  globalThis.fetch=async(input,options)=>{
+    const url=String(input);
+    if(url.includes('generativelanguage.googleapis.com/v1beta/models/')){calls.push(url.match(/models\/([^:]+):/)?.[1]);return Response.json({error:{status:'UNAVAILABLE',message:'Service overloaded'}},{status:503});}
+    if(url==='https://api.elevenlabs.io/v1/speech-to-text'){
+      calls.push('eleven-asr');assert.equal(options.headers['xi-api-key'],'test-eleven');assert.equal(options.body.get('model_id'),'scribe_v2');assert.ok(options.body.get('file').size);
+      return Response.json({text:'Hello world'});
+    }
+    if(url==='https://api.fish.audio/v1/asr'){calls.push('fish-asr');return Response.json({reason:'No balance'},{status:402});}
+    if(url==='https://api.fish.audio/v1/tts'){calls.push('fish-tts');return new Response(Buffer.from('ID3\x03\0\0sample','binary'),{status:200});}
+    return originalFetch(input,options);
+  };
+  try{
+    chat=createChat({dbPath:join(folder,'chat.db')});
+    await new Promise(resolve=>chat.server.listen(0,resolve));const base='http://localhost:'+chat.server.address().port;
+    socket=client(base,{transports:['websocket'],forceNew:true});await once(socket,'connect');
+    const auth=await rpc(socket,'auth',{username:'singer',password:'strong-password',register:true,accountType:'singer'});
+    const room=(await rpc(socket,'enter',{roomName:'Voice room'})).room;
+    const headers={Authorization:'Bearer '+auth.token,'Content-Type':'audio/webm'};
+    const enrolled=await originalFetch(base+'/api/voices/enroll',{method:'POST',headers:{...headers,'X-Voice-Name':'My Voice','X-Voice-Consent':'singer-owned-v1'},body:Buffer.alloc(2048,7)});
+    assert.equal(enrolled.status,201);const voice=(await enrolled.json()).voice;
+    const sent=await originalFetch(base+'/api/voices/'+voice.id+'/clone/'+room.id,{method:'POST',headers:{...headers,'X-Voice-Mode':'realistic'},body:Buffer.from([26,69,223,163])});
+    assert.equal(sent.status,201);assert.equal((await sent.json()).message.attachment.voiceClone.mode,'realistic');
+    assert.deepEqual(calls,['gemini-3.8-flash','gemini-3.8-flash','gemini-3.1-flash-lite','gemini-3.1-flash-lite','eleven-asr','gemini-3.8-flash','gemini-3.8-flash','gemini-3.1-flash-lite','gemini-3.1-flash-lite','eleven-asr','fish-tts']);
+  }finally{
+    socket?.disconnect();if(chat)await new Promise(resolve=>chat.io.close(resolve));globalThis.fetch=originalFetch;
+    for(const [key,value] of [['FISH_AUDIO_API_KEY',previous.fish],['GEMINI_API_KEY',previous.gemini],['ELEVENLABS_API_KEY',previous.eleven],['GEMINI_TRANSCRIBE_MODEL',previous.model]])if(value===undefined)delete process.env[key];else process.env[key]=value;
     rmSync(folder,{recursive:true,force:true});
   }
 });
