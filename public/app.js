@@ -258,7 +258,7 @@ socket.on('typing',p=>{if(p.roomId!==currentRoom?.id)return;$('typing').textCont
 socket.on('call:ring',p=>{if(activeCall)return;if(p.roomId===currentRoom?.id)showIncomingCall(p);else if(document.visibilityState==='visible')showLocalNotification({type:'call',title:'Incoming call from '+p.by,body:'Tap to open and join',roomId:p.roomId,callId:p.callId,url:'/?room='+p.roomId+'&call='+p.callId,tag:'call-'+p.callId});});
 socket.on('call:participant-joined',p=>{if(activeCall?.callId===p.callId){if(p.socketId)createPeer(p.socketId,socket.id.localeCompare(p.socketId)<0);$('call-status').textContent='Connecting audio…';updateCallCount(Math.max(p.participants,peers.size+1));}else if(!activeCall&&p.roomId===currentRoom?.id){incomingCall=p;$('call-title').textContent='Voice call in progress';$('call-subtitle').textContent='Join '+p.participants+' participant'+(p.participants===1?'':'s');$('call-banner').hidden=false;startRingtone();}});
 socket.on('call:participant-left',p=>{if(activeCall?.callId!==p.callId)return;closePeer(p.socketId);updateCallCount(Math.max(p.participants,peers.size+1));});
-socket.on('call:ended',p=>{if(activeCall?.callId===p.callId){resetCallUi();notice('Voice call ended.');}else if(incomingCall?.callId===p.callId){stopRingtone();incomingCall=null;$('call-banner').hidden=true;}});
+socket.on('call:ended',p=>{if(activeCall?.callId===p.callId){resetCallUi();notice('Voice call ended.');}else if(incomingCall?.callId===p.callId)resetCallUi();});
 socket.on('call:declined',p=>{if(activeCall?.callId!==p.callId)return;resetCallUi();notice((p.by||'Contact')+' declined the call.');});
 socket.on('call:signal',async p=>{
   if(activeCall?.callId!==p.callId)return;const peer=createPeer(p.from,false);

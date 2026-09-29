@@ -35,13 +35,13 @@
     row.append(bubble);list.append(row);list.scrollTop=list.scrollHeight;return{row,bubble,copy};
   }
   async function speakText(text){
-    const root=ensureStudio(),button=root.querySelector('#voice-studio-speak');busy=true;button.disabled=true;addBubble('me',text);const pending=addBubble('voice','',{loading:true});
+    const root=ensureStudio(),button=root.querySelector('#voice-studio-speak');busy=true;root.querySelector('.voice-studio').classList.add('lr-processing');button.disabled=true;addBubble('me',text);const pending=addBubble('voice','',{loading:true});pending.row.classList.add('loading');
     try{
       const response=await authFetch('/api/voices/'+encodeURIComponent(activeVoice.id)+'/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
       if(!response.ok){const result=await response.json().catch(()=>({}));throw new Error(result.error||'Voice generation failed.');}
       const blob=await response.blob(),url=URL.createObjectURL(blob);audioUrls.add(url);pending.row.remove();addBubble('voice',text,{audioUrl:url});playingAudio?.pause();playingAudio=new Audio(url);await playingAudio.play();
     }catch(error){pending.copy.textContent=error.message||'Could not generate this voice.';pending.row.classList.add('error');}
-    finally{busy=false;button.disabled=false;root.querySelector('#voice-studio-text').focus();}
+    finally{busy=false;root.querySelector('.voice-studio').classList.remove('lr-processing');pending.row.classList.remove('loading');button.disabled=false;root.querySelector('#voice-studio-text').focus();}
   }
   function openStudio(voice){
     activeVoice=voice;const root=ensureStudio();if(lastVoiceId&&lastVoiceId!==voice.id)root.querySelector('#voice-studio-messages').innerHTML=emptyState();lastVoiceId=voice.id;root.querySelector('#voice-studio-title').textContent=voice.name;root.querySelector('#voice-studio-owner').textContent='@'+voice.owner+' · typed text test';root.hidden=false;requestAnimationFrame(()=>root.classList.add('ready'));root.querySelector('#voice-studio-text').focus();

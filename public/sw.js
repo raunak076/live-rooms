@@ -1,5 +1,5 @@
-const CACHE='live-chat-shell-v21';
-const SHELL=['/','/style.css?v=chat-actions-profile-1','/mobile-fix.css?v=chat-actions-profile-1','/features.css?v=chat-actions-profile-1','/whatsapp.css?v=android-call-5','/android-stability.css?v=stable-2','/experience.css?v=experience-7','/voice-studio.css?v=voice-studio-3','/navigation-polish.css?v=nav-2','/app.js?v=stable-10','/platform-fixes.js?v=stable-3','/voice-studio.js?v=voice-studio-2','/navigation-polish.js?v=nav-1','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png'];
+const CACHE='live-chat-shell-v22';
+const SHELL=['/','/style.css?v=chat-actions-profile-1','/mobile-fix.css?v=chat-actions-profile-1','/features.css?v=chat-actions-profile-1','/whatsapp.css?v=android-call-5','/android-stability.css?v=stable-2','/experience.css?v=experience-7','/voice-studio.css?v=voice-studio-3','/navigation-polish.css?v=nav-2','/activity-glow.css?v=1','/app.js?v=stable-10','/platform-fixes.js?v=stable-3','/voice-studio.js?v=voice-studio-2','/navigation-polish.js?v=nav-1','/activity-glow.js?v=1','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png'];
 
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
