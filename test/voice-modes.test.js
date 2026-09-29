@@ -48,3 +48,39 @@ test('old Fish TTS handles realistic speech and preview; singing never falls bac
     rmSync(folder,{recursive:true,force:true});
   }
 });
+
+test('realistic send retries supported Gemini audio model before depleted Fish ASR',async()=>{
+  const folder=mkdtempSync(join(tmpdir(),'live-gemini-'));
+  const originalFetch=globalThis.fetch,previous={fish:process.env.FISH_AUDIO_API_KEY,gemini:process.env.GEMINI_API_KEY,model:process.env.GEMINI_TRANSCRIBE_MODEL};
+  const models=[];let fishAsr=0,socket,chat;
+  process.env.FISH_AUDIO_API_KEY='test-fish';process.env.GEMINI_API_KEY='test-gemini';process.env.GEMINI_TRANSCRIBE_MODEL='gemini-2.5-flash';
+  globalThis.fetch=async(input,options)=>{
+    const url=String(input);
+    if(url.includes('generativelanguage.googleapis.com/v1beta/models/')){
+      const model=url.match(/models\/([^:]+):/)?.[1];models.push(model);
+      const audio=JSON.parse(options.body).contents[0].parts[1].inlineData;
+      assert.equal(audio.mimeType,'audio/webm');assert.ok(audio.data);
+      return model==='gemini-2.5-flash'?Response.json({error:{status:'NOT_FOUND',message:'Model unavailable'}},{status:404}):Response.json({candidates:[{content:{parts:[{text:'Hello world'}]}}]});
+    }
+    if(url==='https://api.fish.audio/v1/asr'){fishAsr++;return Response.json({reason:'No balance'},{status:402});}
+    if(url==='https://api.fish.audio/v1/tts')return new Response(Buffer.from('ID3\x03\0\0sample','binary'),{status:200});
+    return originalFetch(input,options);
+  };
+  try{
+    chat=createChat({dbPath:join(folder,'chat.db'),voiceClone:async()=>{throw Error('Wrong mode');}});
+    await new Promise(resolve=>chat.server.listen(0,resolve));const base='http://localhost:'+chat.server.address().port;
+    socket=client(base,{transports:['websocket'],forceNew:true});await once(socket,'connect');
+    const auth=await rpc(socket,'auth',{username:'singer',password:'strong-password',register:true,accountType:'singer'});
+    const room=(await rpc(socket,'enter',{roomName:'Voice room'})).room;
+    const headers={Authorization:'Bearer '+auth.token,'Content-Type':'audio/webm'};
+    const enrolled=await originalFetch(base+'/api/voices/enroll',{method:'POST',headers:{...headers,'X-Voice-Name':'My Voice','X-Voice-Consent':'singer-owned-v1'},body:Buffer.alloc(2048,7)});
+    assert.equal(enrolled.status,201);const voice=(await enrolled.json()).voice;
+    const result=await originalFetch(base+'/api/voices/'+voice.id+'/clone/'+room.id,{method:'POST',headers:{...headers,'X-Voice-Mode':'realistic'},body:Buffer.from([26,69,223,163])});
+    assert.equal(result.status,201);assert.equal((await result.json()).message.attachment.voiceClone.mode,'realistic');
+    assert.deepEqual(models,['gemini-2.5-flash','gemini-3.8-flash','gemini-2.5-flash','gemini-3.8-flash']);assert.equal(fishAsr,0);
+  }finally{
+    socket?.disconnect();if(chat)await new Promise(resolve=>chat.io.close(resolve));globalThis.fetch=originalFetch;
+    for(const [key,value] of [['FISH_AUDIO_API_KEY',previous.fish],['GEMINI_API_KEY',previous.gemini],['GEMINI_TRANSCRIBE_MODEL',previous.model]])if(value===undefined)delete process.env[key];else process.env[key]=value;
+    rmSync(folder,{recursive:true,force:true});
+  }
+});
