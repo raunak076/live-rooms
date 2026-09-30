@@ -71,7 +71,7 @@ After signing in, click **Allow** on the notification card so messages and incom
 
 Each AI mention sends up to 20 recent, non-deleted messages from that chat to Google. Its reply is visible to everyone in the chat. Deleting a message removes its text from the application's retained history, but cannot retract data already seen by participants, sent to Google, copied, or included in an earlier AI response. Database backups and SQLite WAL pages are not secure-erased by a deletion. Pending AI replies are suppressed when their trigger message was deleted before completion.
 
-Room invites grant access to anyone signed in who has the link. DMs cannot be joined by outsiders, even if their ID is known. This is not end-to-end encrypted chat: the server stores message text and can read it. Session tokens are stored in browser local storage and only their hashes are stored in SQLite. Sign out revokes the current token. Account deletion is password-confirmed from Profile; password reset is not included.
+Room invites grant access to anyone signed in who has the link. DMs cannot be joined by outsiders, even if their ID is known. This is not end-to-end encrypted chat: the server stores message text and can read it. Session tokens are stored in browser local storage and only their hashes are stored in SQLite. Sign out revokes the current token. Account deletion is password-confirmed from Profile. Password changes and reset through a saved one-time recovery code are available.
 
 This version retains conversation history and initially loads the latest 100 messages. Older messages are available through pagination and search. Rooms and contacts remain across server restarts. Unread badges are per active browser session. Direct-message read receipts persist unless the reader disables them in Profile. Presence means connected to the service, not necessarily currently viewing that conversation.
 
@@ -116,7 +116,7 @@ npm test
 
 Integration tests use real Socket.IO clients and temporary SQLite databases. They cover room delivery, private-chat isolation, authenticated access, call membership and signaling, delete ownership, deletion propagation, retries, AI mention routing with a mocked provider, token reconnect and persistence after restart. A separate check verifies the missing-key behavior. Actual Gemini output requires your API key and was not tested against Google.
 
-The application starts and HTTP endpoints were verified. Automated visual browser review was blocked because the available browser could not open the local server; visual appearance has not been independently screenshot-verified.
+The application starts and HTTP endpoints were verified. The CI workflow runs mobile browser smoke checks and the separate Android workflow builds an installable APK.
 
 ## Files
 
