@@ -1,5 +1,5 @@
-const CACHE='live-chat-shell-v22';
-const SHELL=['/','/style.css?v=chat-actions-profile-1','/mobile-fix.css?v=chat-actions-profile-1','/features.css?v=chat-actions-profile-1','/whatsapp.css?v=android-call-5','/android-stability.css?v=stable-2','/experience.css?v=experience-7','/voice-studio.css?v=voice-studio-3','/navigation-polish.css?v=nav-2','/activity-glow.css?v=1','/app.js?v=stable-10','/platform-fixes.js?v=stable-3','/voice-studio.js?v=voice-studio-2','/navigation-polish.js?v=nav-1','/activity-glow.js?v=1','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png'];
+const CACHE='live-chat-shell-v23';
+const SHELL=['/chat-upgrades.js?v=1','/chat-upgrades.css?v=1','/stickers/hello.svg','/stickers/party.svg','/stickers/love.svg','/stickers/cool.svg','/','/style.css?v=chat-actions-profile-1','/mobile-fix.css?v=chat-actions-profile-1','/features.css?v=chat-actions-profile-1','/whatsapp.css?v=android-call-5','/android-stability.css?v=stable-2','/experience.css?v=experience-7','/voice-studio.css?v=voice-studio-3','/navigation-polish.css?v=nav-2','/activity-glow.css?v=1','/app.js?v=stable-10','/platform-fixes.js?v=stable-3','/voice-studio.js?v=voice-studio-2','/navigation-polish.js?v=nav-1','/activity-glow.js?v=1','/manifest.webmanifest','/favicon.svg','/icon-192.png','/icon-512.png'];
 
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
@@ -34,7 +34,8 @@ self.addEventListener('push',event=>{
   })());
 });
 self.addEventListener('notificationclick',event=>{
-  event.notification.close();if(event.action==='decline'||event.action==='clear')return;
+  event.notification.close();if(event.action==='clear')return;
+  if(event.action==='decline'){event.waitUntil((async()=>{const data=event.notification.data||{},windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});if(windows.length){windows[0].postMessage({type:'decline-call',roomId:data.roomId,callId:data.callId});return;}await self.clients.openWindow('/?decline='+encodeURIComponent(data.callId||'')+'&room='+encodeURIComponent(data.roomId||''));})());return;}
   event.waitUntil((async()=>{
     const data=event.notification.data||{},windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
     if(windows.length){windows[0].postMessage({type:'open-room',roomId:data.roomId,callId:data.callId,joinCall:data.type==='call'});return windows[0].focus();}

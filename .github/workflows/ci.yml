@@ -20,3 +20,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Install mobile browser test runtime
+        run: npm install --no-save --package-lock=false playwright@1.62.1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify mobile chat flows
+        run: node scripts/ui-smoke.mjs
