@@ -38,4 +38,4 @@ jobs:
         run: |
           docker run -d --name live-rooms-ci -p 3000:3000 live-rooms-ci
           trap 'docker logs live-rooms-ci; docker rm -f live-rooms-ci' EXIT
-          curl --fail --retry 10 --retry-delay 2 --retry-connrefused --max-time 5 http://127.0.0.1:3000/api/health
+          curl --fail --retry 10 --retry-delay 2 --retry-all-errors --retry-connrefused --max-time 5 http://127.0.0.1:3000/api/health
