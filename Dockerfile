@@ -3,7 +3,7 @@ RUN apk add --no-cache su-exec ffmpeg
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
-COPY server.js ./
+COPY server.js chat-features.js ./
 COPY fish-bootstrap.js ./
 COPY speech-bootstrap.js ./
 COPY performance-bootstrap.js ./
