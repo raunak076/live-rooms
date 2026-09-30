@@ -4,8 +4,8 @@
 let callVibrationTimer=null;
 
 if(nativeAndroid)document.body.classList.add('native-android');
-if(!document.querySelector('link[data-voice-studio]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/voice-studio.css?v=1';link.dataset.voiceStudio='1';document.head.append(link);}
-if(!document.querySelector('script[data-voice-studio]')){const script=document.createElement('script');script.src='/voice-studio.js?v=1';script.defer=true;script.dataset.voiceStudio='1';document.head.append(script);}
+if(!document.querySelector('link[href^="/voice-studio.css"]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/voice-studio.css?v=1';link.dataset.voiceStudio='1';document.head.append(link);}
+if(!document.querySelector('script[src^="/voice-studio.js"]')){const script=document.createElement('script');script.src='/voice-studio.js?v=1';script.defer=true;script.dataset.voiceStudio='1';document.head.append(script);}
 
 // Reconnects should never sign the user out because a room refresh or socket RPC timed out.
 // /api/sync is authoritative: it only clears the saved session on a real HTTP 401.

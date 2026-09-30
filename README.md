@@ -58,7 +58,7 @@ Get a key at https://aistudio.google.com/apikey. The model is configurable: use 
 - Camera capture, multi-contact group creation, profile About text and optional read receipts.
 - `@gemini` mentions trigger an AI answer in the same room; ordinary messages do not call AI.
 - Delete your own messages for everyone. The server checks ownership and replaces retained content with a tombstone.
-- SQLite persistence for accounts, hashed sessions, room membership and the most recent 100 messages per chat.
+- SQLite persistence for accounts, hashed sessions, room membership and paginated chat history.
 - Responsive layout, button spring feedback and message-entry bounce; respects reduced-motion settings.
 
 Example: `@gemini explain Java HashMap with a small example`.
@@ -71,9 +71,9 @@ After signing in, click **Allow** on the notification card so messages and incom
 
 Each AI mention sends up to 20 recent, non-deleted messages from that chat to Google. Its reply is visible to everyone in the chat. Deleting a message removes its text from the application's retained history, but cannot retract data already seen by participants, sent to Google, copied, or included in an earlier AI response. Database backups and SQLite WAL pages are not secure-erased by a deletion. Pending AI replies are suppressed when their trigger message was deleted before completion.
 
-Room invites grant access to anyone signed in who has the link. DMs cannot be joined by outsiders, even if their ID is known. This is not end-to-end encrypted chat: the server stores message text and can read it. Session tokens are stored in browser local storage and only their hashes are stored in SQLite. Sign out revokes the current token. Account deletion is password-confirmed from Profile; password reset is not included.
+Room invites grant access to anyone signed in who has the link. DMs cannot be joined by outsiders, even if their ID is known. This is not end-to-end encrypted chat: the server stores message text and can read it. Session tokens are stored in browser local storage and only their hashes are stored in SQLite. Sign out revokes the current token. Account deletion is password-confirmed from Profile. Password changes and reset through a saved one-time recovery code are available.
 
-This version retains 100 messages per conversation. Older messages are automatically removed. Rooms and contacts remain across server restarts. Unread badges are per active browser session. Direct-message read receipts persist unless the reader disables them in Profile. Presence means connected to the service, not necessarily currently viewing that conversation.
+This version retains conversation history and initially loads the latest 100 messages. Older messages are available through pagination and search. Rooms and contacts remain across server restarts. Unread badges are per active browser session. Direct-message read receipts persist unless the reader disables them in Profile. Presence means connected to the service, not necessarily currently viewing that conversation.
 
 Uploaded media is stored under the persistent `data/uploads` directory and is served only after session and room-membership checks. Deleting its chat message makes the media endpoint unavailable, although the underlying file is retained for operational recovery.
 
@@ -116,7 +116,7 @@ npm test
 
 Integration tests use real Socket.IO clients and temporary SQLite databases. They cover room delivery, private-chat isolation, authenticated access, call membership and signaling, delete ownership, deletion propagation, retries, AI mention routing with a mocked provider, token reconnect and persistence after restart. A separate check verifies the missing-key behavior. Actual Gemini output requires your API key and was not tested against Google.
 
-The application starts and HTTP endpoints were verified. Automated visual browser review was blocked because the available browser could not open the local server; visual appearance has not been independently screenshot-verified.
+The application starts and HTTP endpoints were verified. The CI workflow runs mobile browser smoke checks and the separate Android workflow builds an installable APK.
 
 ## Files
 
@@ -125,3 +125,16 @@ The application starts and HTTP endpoints were verified. Automated visual browse
 - `test/chat.test.js`: multi-client integration tests.
 - `.env.example`: environment setup.
 - `Dockerfile`, `compose.yaml`: single-instance container deployment.
+
+
+### Messaging and account improvements
+
+- History is retained instead of being pruned at 100 messages. Older messages load in pages, and search covers saved history. Previously deleted history cannot be reconstructed.
+- Text drafts and an idempotent outbox are stored per account on the device. Offline text sends resume after reconnection; failed messages can be tapped to retry. Voice recordings are previewed before sending and retained for retry while the page remains open.
+- Receipts distinguish queued, sent, delivered and seen. Android speaker switching routes to speaker/earpiece without muting received audio. Browser output follows device settings.
+- Chat info provides member details, notification mute and group admin controls. Existing groups use their first stored member as admin. Rotating an invite invalidates previous codes and legacy room-ID invites for new members.
+- PDF, TXT, DOCX and XLSX attachments use authenticated downloads. Messages and attachments can be forwarded; messages can be starred or selected for bulk actions. The self-hosted sticker pack includes recent/favourite filters (hold to favourite).
+- Profile includes password change and recovery-code setup. Save the one-time code before forgetting your password. Resetting a password revokes all existing sessions. There is no email-based recovery configured.
+- Android quick replies are persisted with stable identifiers, removed only after server acknowledgement, and exposed to the in-app outbox for retry. Native changes require the updated APK.
+
+Validation: `npm test` runs server regressions. `PLAYWRIGHT_MODULE=/path/to/playwright node scripts/ui-smoke.mjs` runs an isolated mobile browser smoke test with fake microphone input. Actual Android background delivery, audio routing, TURN reachability and paid voice providers still require real-device/service checks.

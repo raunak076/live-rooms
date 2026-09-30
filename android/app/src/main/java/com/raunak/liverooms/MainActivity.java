@@ -4,6 +4,9 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.media.AudioDeviceInfo;
@@ -129,6 +132,9 @@ public class MainActivity extends Activity {
     }
 
     private class NativeBridge {
+        @JavascriptInterface public String getSavedReplies(String username){SharedPreferences prefs=getSharedPreferences(NotificationService.PREFS,MODE_PRIVATE);if(username==null||!username.equals(prefs.getString(NotificationService.EXTRA_USERNAME,"")))return "[]";return prefs.getString("reply_queue_"+username,"[]");}
+        @JavascriptInterface public void confirmSavedReply(String clientId){runOnUiThread(()->{try{SharedPreferences prefs=getSharedPreferences(NotificationService.PREFS,MODE_PRIVATE);String key="reply_queue_"+prefs.getString(NotificationService.EXTRA_USERNAME,"");JSONArray saved=new JSONArray(prefs.getString(key,"[]")),remaining=new JSONArray();for(int i=0;i<saved.length();i++)if(!clientId.equals(saved.getJSONObject(i).optString("clientId")))remaining.put(saved.getJSONObject(i));prefs.edit().putString(key,remaining.toString()).commit();}catch(Exception ignored){}});}
+
         @JavascriptInterface public void startNotifications(String token,String username){if(token==null||!token.matches("[a-f0-9]{64}")||username==null||!username.matches("[a-z0-9_]{3,24}"))return;Intent service=new Intent(MainActivity.this,NotificationService.class).putExtra(NotificationService.EXTRA_TOKEN,token).putExtra(NotificationService.EXTRA_USERNAME,username);runOnUiThread(()->{if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O)startForegroundService(service);else startService(service);});}
         @JavascriptInterface public void stopNotifications(){getSharedPreferences(NotificationService.PREFS,MODE_PRIVATE).edit().clear().apply();runOnUiThread(()->stopService(new Intent(MainActivity.this,NotificationService.class)));}
         @JavascriptInterface public void setSpeakerphone(boolean enabled){runOnUiThread(()->{AudioManager audio=(AudioManager)getSystemService(AUDIO_SERVICE);audio.setMode(AudioManager.MODE_IN_COMMUNICATION);if(Build.VERSION.SDK_INT>=31){int wanted=enabled?AudioDeviceInfo.TYPE_BUILTIN_SPEAKER:AudioDeviceInfo.TYPE_BUILTIN_EARPIECE;for(AudioDeviceInfo device:audio.getAvailableCommunicationDevices())if(device.getType()==wanted){audio.setCommunicationDevice(device);return;}if(!enabled)audio.clearCommunicationDevice();}else audio.setSpeakerphoneOn(enabled);});}
